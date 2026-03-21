@@ -1,0 +1,13 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(npm install:*)",
+      "Bash(npm run:*)",
+      "Bash(awk 'NR>=2900 && NR<=3080' \"d:/Projects/2026/AdTRUE Platform/oohx/oohx-v2.html\")",
+      "Bash(awk 'NR>=500 && NR<=1000' \"d:/Projects/2026/AdTRUE Platform/oohx/oohx-v2.html\")",
+      "Bash(awk 'NR>=1000 && NR<=1500' \"d:/Projects/2026/AdTRUE Platform/oohx/oohx-v2.html\")",
+      "Bash(awk 'NR>=1500 && NR<=1890' \"d:/Projects/2026/AdTRUE Platform/oohx/oohx-v2.html\")",
+      "Bash(npx tsc:*)"
+    ]
+  }
+}
