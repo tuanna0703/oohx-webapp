@@ -58,6 +58,7 @@ export default function HomePage() {
 
         {/* HERO */}
         <section className="hero">
+          <div style={{position:'absolute',inset:0,overflow:'hidden',pointerEvents:'none'}}>
           <div className="hero-grid"></div>
           <div className="hero-glow hero-glow-1"></div>
           <div className="hero-glow hero-glow-2"></div>
@@ -150,6 +151,7 @@ export default function HomePage() {
               <div className="hb-label">LCD · Square</div>
             </div>
           </div>
+          </div>{/* /decorative-clip */}
 
           <div className="container" style={{position:'relative',zIndex:2,width:'100%',boxSizing:'border-box'}}>
             <div className="hero-center fade-up">
