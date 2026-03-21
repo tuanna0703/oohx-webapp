@@ -41,25 +41,32 @@ export default function BrowsePage() {
   const [screens, setScreens]   = useState<Screen[]>([]);
   const [loading, setLoading]   = useState(true);
   const [total, setTotal]       = useState(0);
+  const [page, setPage]         = useState(1);
+
+  const PAGE_SIZE = 24;
+  const totalPages = Math.ceil(total / PAGE_SIZE);
 
   function toggle<T>(arr: T[], val: T): T[] {
     return arr.includes(val) ? arr.filter(x => x !== val) : [...arr, val];
   }
 
-  // ── Fetch từ /api/screens khi filter hoặc view thay đổi ───────────────────
+  // Reset về page 1 khi filter hoặc view thay đổi
+  useEffect(() => { setPage(1) }, [view, selCities, selVenues, selFormats, searchQ])
+
+  // ── Fetch từ /api/screens ──────────────────────────────────────────────────
   useEffect(() => {
     const controller = new AbortController()
     const params = new URLSearchParams()
 
-    // Map view: lấy toàn bộ screens (parallel pagination server-side)
-    // List view: phân trang bình thường
     if (view === 'map') {
+      // Map: lấy toàn bộ (parallel pagination server-side)
       params.set('all', 'true')
     } else {
-      params.set('limit', '100')
+      // List: 24 màn hình / trang
+      params.set('limit', String(PAGE_SIZE))
+      params.set('page', String(page))
     }
 
-    // Chọn đúng 1 → gửi lên API. Chọn > 1 → fetch all, filter client-side
     if (selCities.length === 1 && CITY_CODE[selCities[0]])
       params.set('city', CITY_CODE[selCities[0]])
     if (selVenues.length === 1 && VENUE_CODE[selVenues[0]])
@@ -77,7 +84,7 @@ export default function BrowsePage() {
       .finally(() => setLoading(false))
 
     return () => controller.abort()
-  }, [view, selCities, selVenues])
+  }, [view, selCities, selVenues, page])
 
   // ── Client-side filter: text search + format + multi-city/venue ────────────
   const filtered = useMemo(() => {
@@ -275,6 +282,50 @@ export default function BrowsePage() {
                 ))
               )}
             </div>
+
+            {/* Pagination */}
+            {totalPages > 1 && (
+              <div style={{display:'flex',alignItems:'center',justifyContent:'center',gap:'8px',padding:'24px 0'}}>
+                <button
+                  className="btn btn-ghost btn-sm"
+                  disabled={page === 1}
+                  onClick={() => { setPage(p => p - 1); window.scrollTo(0,0) }}
+                >
+                  ← Trước
+                </button>
+
+                {Array.from({length: Math.min(totalPages, 7)}, (_, i) => {
+                  // Hiển thị tối đa 7 số trang xung quanh trang hiện tại
+                  let p: number;
+                  if (totalPages <= 7) p = i + 1;
+                  else if (page <= 4) p = i + 1;
+                  else if (page >= totalPages - 3) p = totalPages - 6 + i;
+                  else p = page - 3 + i;
+                  return (
+                    <button
+                      key={p}
+                      className={`btn btn-sm${p === page ? ' btn-primary' : ' btn-ghost'}`}
+                      style={{minWidth:'36px'}}
+                      onClick={() => { setPage(p); window.scrollTo(0,0) }}
+                    >
+                      {p}
+                    </button>
+                  );
+                })}
+
+                <button
+                  className="btn btn-ghost btn-sm"
+                  disabled={page === totalPages}
+                  onClick={() => { setPage(p => p + 1); window.scrollTo(0,0) }}
+                >
+                  Sau →
+                </button>
+
+                <span style={{fontSize:'12px',color:'var(--g500)',marginLeft:'8px'}}>
+                  {page}/{totalPages} · {total} màn hình
+                </span>
+              </div>
+            )}
           </div>
         )}
       </div>
