@@ -1,12 +1,12 @@
 import Link from 'next/link';
 import { notFound } from 'next/navigation';
-import dynamic from 'next/dynamic';
+import dynamicImport from 'next/dynamic';
 import { screens as mockScreens, owners, iconSVG } from '@/lib/data';
 import { getScreen } from '@/lib/tapon/inventory';
 import { mapScreen } from '@/lib/tapon/mapper';
 import type { Screen } from '@/lib/types';
 
-const MapDetail = dynamic(() => import('@/components/MapDetail'), { ssr: false });
+const MapDetail = dynamicImport(() => import('@/components/MapDetail'), { ssr: false });
 
 interface Props {
   params: { id: string };
