@@ -46,10 +46,18 @@ export default function BrowsePage() {
     return arr.includes(val) ? arr.filter(x => x !== val) : [...arr, val];
   }
 
-  // ── Fetch từ /api/screens khi filter server-side thay đổi ──────────────────
+  // ── Fetch từ /api/screens khi filter hoặc view thay đổi ───────────────────
   useEffect(() => {
     const controller = new AbortController()
-    const params = new URLSearchParams({ limit: '100' })
+    const params = new URLSearchParams()
+
+    // Map view: lấy toàn bộ screens (parallel pagination server-side)
+    // List view: phân trang bình thường
+    if (view === 'map') {
+      params.set('all', 'true')
+    } else {
+      params.set('limit', '100')
+    }
 
     // Chọn đúng 1 → gửi lên API. Chọn > 1 → fetch all, filter client-side
     if (selCities.length === 1 && CITY_CODE[selCities[0]])
@@ -69,7 +77,7 @@ export default function BrowsePage() {
       .finally(() => setLoading(false))
 
     return () => controller.abort()
-  }, [selCities, selVenues])
+  }, [view, selCities, selVenues])
 
   // ── Client-side filter: text search + format + multi-city/venue ────────────
   const filtered = useMemo(() => {

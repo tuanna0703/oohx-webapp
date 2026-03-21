@@ -24,6 +24,33 @@ export async function getScreens(
   return sspFetchJson<TapOnListResponse>(`/inventory/screens${query}`)
 }
 
+// ─── Fetch toàn bộ screens (parallel pagination) ─────────────────────────────
+// Gọi page 1 trước để lấy total, sau đó fetch song song các page còn lại
+
+export async function getAllScreens(
+  baseParams: Omit<ScreenListParams, 'page' | 'limit'> = {},
+): Promise<TapOnScreen[]> {
+  const PAGE_SIZE = 100 // TapON max limit
+
+  // Fetch page 1
+  const first = await getScreens({ ...baseParams, page: 1, limit: PAGE_SIZE })
+  const total = first.total
+  const totalPages = Math.ceil(total / PAGE_SIZE)
+
+  if (totalPages <= 1) return first.data
+
+  // Fetch page 2..N song song
+  const rest = await Promise.all(
+    Array.from({ length: totalPages - 1 }, (_, i) =>
+      getScreens({ ...baseParams, page: i + 2, limit: PAGE_SIZE })
+        .then(r => r.data)
+        .catch(() => [] as TapOnScreen[]), // bỏ qua page lỗi, không dừng cả batch
+    ),
+  )
+
+  return [...first.data, ...rest.flat()]
+}
+
 // ─── Single screen ────────────────────────────────────────────────────────────
 
 export async function getScreen(screenId: string): Promise<TapOnScreen> {
