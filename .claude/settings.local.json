@@ -9,5 +9,13 @@
       "Bash(awk 'NR>=1500 && NR<=1890' \"d:/Projects/2026/AdTRUE Platform/oohx/oohx-v2.html\")",
       "Bash(npx tsc:*)"
     ]
+  },  
+  "agents": {
+    "frontend-builder": ".claude/agents/frontend-builder.md",
+    "api-consumer-guard": ".claude/agents/api-consumer-guard.md",
+    "auth-session-guard": ".claude/agents/auth-session-guard.md",
+    "ux-state-reviewer": ".claude/agents/ux-state-reviewer.md",
+    "frontend-test-writer": ".claude/agents/frontend-test-writer.md"
   }
+
 }

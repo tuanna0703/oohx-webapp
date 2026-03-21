@@ -1,50 +1,92 @@
 'use client';
-import { useState, useMemo } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import Link from 'next/link';
 import dynamic from 'next/dynamic';
-import { screens, iconSVG } from '@/lib/data';
+import { iconSVG } from '@/lib/data';
 import type { Screen } from '@/lib/types';
 
 const MapBrowse = dynamic(() => import('@/components/MapBrowse'), { ssr: false });
 
-const cities = ['Hà Nội', 'TP.HCM', 'Đà Nẵng', 'Hải Phòng', 'Cần Thơ'];
+const cities     = ['Hà Nội', 'TP.HCM', 'Đà Nẵng', 'Hải Phòng', 'Cần Thơ'];
 const venueTypes = ['Retail', 'Outdoor', 'F&B', 'Transit', 'Office'];
-const formats = ['LCD', 'LED', 'Billboard'];
+const formats    = ['LCD', 'LED', 'Billboard'];
 const orientations = ['Landscape', 'Portrait'];
 
+// OOHX label → TapON API param
+const CITY_CODE: Record<string, string> = {
+  'Hà Nội':   'hanoi',
+  'TP.HCM':   'hcm',
+  'Đà Nẵng':  'danang',
+  'Hải Phòng':'haiphong',
+  'Cần Thơ':  'cantho',
+}
+const VENUE_CODE: Record<string, string> = {
+  Retail:  'mall',
+  Outdoor: 'outdoor',
+  'F&B':   'fnb',
+  Transit: 'transit',
+  Office:  'office',
+}
+
 export default function BrowsePage() {
-  const [view, setView] = useState<'map' | 'list'>('map');
+  const [view, setView]               = useState<'map' | 'list'>('map');
   const [filterPanel, setFilterPanel] = useState(true);
-  const [searchQ, setSearchQ] = useState('');
-  const [selCities, setSelCities] = useState<string[]>(['Hà Nội']);
-  const [selVenues, setSelVenues] = useState<string[]>(['Outdoor']);
-  const [selFormats, setSelFormats] = useState<string[]>([]);
-  const [selOri, setSelOri] = useState<string[]>(['Landscape']);
-  const [selected, setSelected] = useState<Screen | null>(null);
+  const [searchQ, setSearchQ]         = useState('');
+  const [selCities, setSelCities]     = useState<string[]>([]);
+  const [selVenues, setSelVenues]     = useState<string[]>([]);
+  const [selFormats, setSelFormats]   = useState<string[]>([]);
+  const [selOri, setSelOri]           = useState<string[]>([]);
+  const [selected, setSelected]       = useState<Screen | null>(null);
+
+  const [screens, setScreens]   = useState<Screen[]>([]);
+  const [loading, setLoading]   = useState(true);
+  const [total, setTotal]       = useState(0);
 
   function toggle<T>(arr: T[], val: T): T[] {
     return arr.includes(val) ? arr.filter(x => x !== val) : [...arr, val];
   }
 
+  // ── Fetch từ /api/screens khi filter server-side thay đổi ──────────────────
+  useEffect(() => {
+    const controller = new AbortController()
+    const params = new URLSearchParams({ limit: '100' })
+
+    // Chọn đúng 1 → gửi lên API. Chọn > 1 → fetch all, filter client-side
+    if (selCities.length === 1 && CITY_CODE[selCities[0]])
+      params.set('city', CITY_CODE[selCities[0]])
+    if (selVenues.length === 1 && VENUE_CODE[selVenues[0]])
+      params.set('venue_type', VENUE_CODE[selVenues[0]])
+
+    setLoading(true)
+
+    fetch(`/api/screens?${params}`, { signal: controller.signal })
+      .then(r => r.json())
+      .then(data => {
+        setScreens(data.data ?? [])
+        setTotal(data.total ?? 0)
+      })
+      .catch(err => { if (err.name !== 'AbortError') setScreens([]) })
+      .finally(() => setLoading(false))
+
+    return () => controller.abort()
+  }, [selCities, selVenues])
+
+  // ── Client-side filter: text search + format + multi-city/venue ────────────
   const filtered = useMemo(() => {
     return screens.filter(s => {
-      if (searchQ && !s.name.toLowerCase().includes(searchQ.toLowerCase()) && !s.loc.toLowerCase().includes(searchQ.toLowerCase())) return false;
-      if (selVenues.length > 0 && !selVenues.includes(s.venue)) return false;
+      if (searchQ && !s.name.toLowerCase().includes(searchQ.toLowerCase()) &&
+          !s.loc.toLowerCase().includes(searchQ.toLowerCase())) return false;
       if (selFormats.length > 0 && !selFormats.includes(s.type)) return false;
-      if (selCities.length > 0) {
-        const cityMatch = selCities.some(c => {
-          if (c === 'Hà Nội') return s.loc.includes('Hà Nội') || s.loc.includes('HN');
-          if (c === 'TP.HCM') return s.loc.includes('HCM') || s.loc.includes('Hồ Chí Minh');
-          if (c === 'Đà Nẵng') return s.loc.includes('Đà Nẵng');
-          if (c === 'Hải Phòng') return s.loc.includes('Hải Phòng');
-          if (c === 'Cần Thơ') return s.loc.includes('Cần Thơ');
-          return false;
-        });
-        if (!cityMatch) return false;
+      // Multi-city: khi chọn nhiều hơn 1 thì filter client-side
+      if (selCities.length > 1) {
+        const match = selCities.some(c => s.loc.includes(c === 'TP.HCM' ? 'Hồ Chí Minh' : c))
+        if (!match) return false;
       }
+      // Multi-venue: khi chọn nhiều hơn 1 thì filter client-side
+      if (selVenues.length > 1 && !selVenues.includes(s.venue)) return false;
       return true;
     });
-  }, [searchQ, selCities, selVenues, selFormats, selOri]);
+  }, [screens, searchQ, selCities, selVenues, selFormats]);
 
   function clearFilters() {
     setSearchQ('');
@@ -131,7 +173,12 @@ export default function BrowsePage() {
                 Bộ lọc
               </button>
             )}
-            <div className="browse-count"><strong>{filtered.length}</strong> màn hình</div>
+            <div className="browse-count">
+              {loading
+                ? <span style={{color:'var(--g400)'}}>Đang tải...</span>
+                : <><strong>{filtered.length}</strong> màn hình{total > filtered.length ? ` / ${total} tổng` : ''}</>
+              }
+            </div>
           </div>
           <div className="browse-toolbar-right">
             <select className="sort-sel">
@@ -152,8 +199,18 @@ export default function BrowsePage() {
           </div>
         </div>
 
+        {/* Loading skeleton */}
+        {loading && (
+          <div style={{display:'flex',alignItems:'center',justifyContent:'center',flex:1,padding:'60px',color:'var(--g400)',gap:'10px'}}>
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" style={{animation:'spin 1s linear infinite'}}>
+              <path d="M21 12a9 9 0 1 1-6.219-8.56"/>
+            </svg>
+            Đang tải màn hình...
+          </div>
+        )}
+
         {/* Map view */}
-        {view === 'map' && (
+        {!loading && view === 'map' && (
           <div id="map-view-wrap" style={{flex:1,display:'flex',flexDirection:'column'}}>
             <MapBrowse screens={filtered} onScreenSelect={setSelected}/>
             {selected && (
@@ -173,7 +230,7 @@ export default function BrowsePage() {
         )}
 
         {/* List view */}
-        {view === 'list' && (
+        {!loading && view === 'list' && (
           <div id="list-view-wrap" className="list-view-wrap">
             <div className="list-grid" id="list-grid">
               {filtered.length === 0 ? (
@@ -194,7 +251,12 @@ export default function BrowsePage() {
                       </div>
                       <div className="sc-tags"><span className="sc-pill">{s.size}</span><span className="sc-pill">{s.venue}</span></div>
                       <div className="sc-footer">
-                        <div className="sc-impr"><strong>{(s.weekly/1000).toFixed(0)}K</strong> lượt/tuần</div>
+                        <div className="sc-impr">
+                          {s.weekly > 0
+                            ? <><strong>{(s.weekly/1000).toFixed(0)}K</strong> lượt/tuần</>
+                            : <><strong>{(s.price_per_slot_vnd/1000).toFixed(0)}K</strong> /slot</>
+                          }
+                        </div>
                         <div className="sc-lock">
                           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" width="12" height="12"><rect x="3" y="11" width="18" height="11" rx="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>
                           Đăng nhập

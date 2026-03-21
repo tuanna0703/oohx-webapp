@@ -1,18 +1,20 @@
 import type { Screen, Owner } from './types'
 
+const DEF = { weekly: 0, price_per_slot_vnd: 0, slot_duration_sec: 15, slots_per_loop: 8, min_booking_days: 7, orientation: 'landscape' as const }
+
 export const screens: Screen[] = [
-  { id: 1, name: 'Billboard Nút Giao Cầu Giấy', loc: 'Xuân Thủy, Cầu Giấy, Hà Nội', venue: 'Outdoor', type: 'Billboard', size: '14×6m', weekly: 380000, lat: 21.0380, lng: 105.7992, color: 'green', thumb: 'bg2', owner: 'adtrue' },
-  { id: 2, name: 'Vincom Mega Mall — Atrium L1', loc: 'Royal City, Thanh Xuân, Hà Nội', venue: 'Retail', type: 'LCD', size: '75"', weekly: 120000, lat: 20.9963, lng: 105.8045, color: 'blue', thumb: 'bg1', owner: 'vingroup' },
-  { id: 3, name: 'The Coffee House — Nguyễn Huệ', loc: 'Lê Thánh Tôn, Quận 1, HCM', venue: 'F&B', type: 'LCD', size: '55"', weekly: 85000, lat: 10.7769, lng: 106.7009, color: 'orange', thumb: 'bg3', owner: 'tch' },
-  { id: 4, name: 'AEON Mall Hà Đông — Entrance', loc: 'Dương Nội, Hà Đông, Hà Nội', venue: 'Retail', type: 'LED', size: '8×3m', weekly: 210000, lat: 20.9710, lng: 105.7628, color: 'blue', thumb: 'bg4', owner: 'aeon' },
-  { id: 5, name: 'Lotte Center Lobby', loc: '54 Liễu Giai, Ba Đình, Hà Nội', venue: 'Office', type: 'LCD', size: '65"', weekly: 45000, lat: 21.0380, lng: 105.8341, color: 'blue', thumb: 'bg5', owner: 'savills' },
-  { id: 6, name: 'GS25 Hoàn Kiếm', loc: 'Đinh Tiên Hoàng, Hoàn Kiếm, HN', venue: 'F&B', type: 'LCD', size: '32"', weekly: 32000, lat: 21.0281, lng: 105.8527, color: 'green', thumb: 'bg6', owner: 'tch' },
-  { id: 7, name: 'Bitexco Financial Tower', loc: '2 Hải Triều, Quận 1, HCM', venue: 'Office', type: 'LED', size: '10×4m', weekly: 160000, lat: 10.7716, lng: 106.7040, color: 'blue', thumb: 'bg1', owner: 'savills' },
-  { id: 8, name: 'Sân bay Nội Bài — Terminal 2', loc: 'Sóc Sơn, Hà Nội', venue: 'Transit', type: 'LCD', size: '75"', weekly: 280000, lat: 21.2187, lng: 105.8038, color: 'green', thumb: 'bg2', owner: 'adtrue' },
-  { id: 9, name: 'Parkson Hùng Vương', loc: 'Quận 5, TP. Hồ Chí Minh', venue: 'Retail', type: 'LCD', size: '65"', weekly: 95000, lat: 10.7551, lng: 106.6603, color: 'orange', thumb: 'bg3', owner: 'vingroup' },
-  { id: 10, name: 'Landmark 81 Sky View', loc: 'Bình Thạnh, TP. Hồ Chí Minh', venue: 'Entertainment', type: 'LED', size: '12×5m', weekly: 220000, lat: 10.7944, lng: 106.7218, color: 'blue', thumb: 'bg4', owner: 'aeon' },
-  { id: 11, name: 'Đà Nẵng — Cầu Rồng Billboard', loc: 'Bạch Đằng, Hải Châu, Đà Nẵng', venue: 'Outdoor', type: 'Billboard', size: '16×7m', weekly: 195000, lat: 16.0621, lng: 108.2271, color: 'green', thumb: 'bg2', owner: 'adtrue' },
-  { id: 12, name: 'Vinmart+ Cầu Giấy', loc: 'Trần Đăng Ninh, Cầu Giấy, HN', venue: 'Retail', type: 'LCD', size: '43"', weekly: 28000, lat: 21.0358, lng: 105.8014, color: 'blue', thumb: 'bg1', owner: 'vingroup' },
+  { ...DEF, id: 'mock-1',  name: 'Billboard Nút Giao Cầu Giấy',    loc: 'Xuân Thủy, Cầu Giấy, Hà Nội',         venue: 'Outdoor', type: 'Billboard', size: '14×6m', weekly: 380000, lat: 21.0380, lng: 105.7992, color: 'green',  thumb: 'bg2', owner: 'adtrue',  owner_name: 'AdTRUE Media' },
+  { ...DEF, id: 'mock-2',  name: 'Vincom Mega Mall — Atrium L1',    loc: 'Royal City, Thanh Xuân, Hà Nội',       venue: 'Retail',  type: 'LCD',       size: '75"',   weekly: 120000, lat: 20.9963, lng: 105.8045, color: 'blue',   thumb: 'bg1', owner: 'vingroup', owner_name: 'Vingroup Retail Media' },
+  { ...DEF, id: 'mock-3',  name: 'The Coffee House — Nguyễn Huệ',   loc: 'Lê Thánh Tôn, Quận 1, HCM',           venue: 'F&B',     type: 'LCD',       size: '55"',   weekly:  85000, lat: 10.7769, lng: 106.7009, color: 'orange', thumb: 'bg3', owner: 'tch',     owner_name: 'The Coffee House' },
+  { ...DEF, id: 'mock-4',  name: 'AEON Mall Hà Đông — Entrance',    loc: 'Dương Nội, Hà Đông, Hà Nội',          venue: 'Retail',  type: 'LED',       size: '8×3m',  weekly: 210000, lat: 20.9710, lng: 105.7628, color: 'blue',   thumb: 'bg4', owner: 'aeon',    owner_name: 'AEON Vietnam' },
+  { ...DEF, id: 'mock-5',  name: 'Lotte Center Lobby',              loc: '54 Liễu Giai, Ba Đình, Hà Nội',       venue: 'Office',  type: 'LCD',       size: '65"',   weekly:  45000, lat: 21.0380, lng: 105.8341, color: 'blue',   thumb: 'bg5', owner: 'savills', owner_name: 'Savills Vietnam' },
+  { ...DEF, id: 'mock-6',  name: 'GS25 Hoàn Kiếm',                 loc: 'Đinh Tiên Hoàng, Hoàn Kiếm, HN',      venue: 'F&B',     type: 'LCD',       size: '32"',   weekly:  32000, lat: 21.0281, lng: 105.8527, color: 'green',  thumb: 'bg6', owner: 'tch',     owner_name: 'The Coffee House' },
+  { ...DEF, id: 'mock-7',  name: 'Bitexco Financial Tower',         loc: '2 Hải Triều, Quận 1, HCM',            venue: 'Office',  type: 'LED',       size: '10×4m', weekly: 160000, lat: 10.7716, lng: 106.7040, color: 'blue',   thumb: 'bg1', owner: 'savills', owner_name: 'Savills Vietnam' },
+  { ...DEF, id: 'mock-8',  name: 'Sân bay Nội Bài — Terminal 2',   loc: 'Sóc Sơn, Hà Nội',                     venue: 'Transit', type: 'LCD',       size: '75"',   weekly: 280000, lat: 21.2187, lng: 105.8038, color: 'green',  thumb: 'bg2', owner: 'adtrue',  owner_name: 'AdTRUE Media' },
+  { ...DEF, id: 'mock-9',  name: 'Parkson Hùng Vương',             loc: 'Quận 5, TP. Hồ Chí Minh',             venue: 'Retail',  type: 'LCD',       size: '65"',   weekly:  95000, lat: 10.7551, lng: 106.6603, color: 'orange', thumb: 'bg3', owner: 'vingroup', owner_name: 'Vingroup Retail Media' },
+  { ...DEF, id: 'mock-10', name: 'Landmark 81 Sky View',            loc: 'Bình Thạnh, TP. Hồ Chí Minh',         venue: 'Entertainment', type: 'LED', size: '12×5m', weekly: 220000, lat: 10.7944, lng: 106.7218, color: 'blue',   thumb: 'bg4', owner: 'aeon',    owner_name: 'AEON Vietnam' },
+  { ...DEF, id: 'mock-11', name: 'Đà Nẵng — Cầu Rồng Billboard',   loc: 'Bạch Đằng, Hải Châu, Đà Nẵng',        venue: 'Outdoor', type: 'Billboard', size: '16×7m', weekly: 195000, lat: 16.0621, lng: 108.2271, color: 'green',  thumb: 'bg2', owner: 'adtrue',  owner_name: 'AdTRUE Media' },
+  { ...DEF, id: 'mock-12', name: 'Vinmart+ Cầu Giấy',              loc: 'Trần Đăng Ninh, Cầu Giấy, HN',        venue: 'Retail',  type: 'LCD',       size: '43"',   weekly:  28000, lat: 21.0358, lng: 105.8014, color: 'blue',   thumb: 'bg1', owner: 'vingroup', owner_name: 'Vingroup Retail Media' },
 ]
 
 export const owners: Record<string, Owner> = {

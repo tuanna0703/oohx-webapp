@@ -1,7 +1,10 @@
 import Link from 'next/link';
 import { notFound } from 'next/navigation';
 import dynamic from 'next/dynamic';
-import { screens, owners, iconSVG } from '@/lib/data';
+import { screens as mockScreens, owners, iconSVG } from '@/lib/data';
+import { getScreen } from '@/lib/tapon/inventory';
+import { mapScreen } from '@/lib/tapon/mapper';
+import type { Screen } from '@/lib/types';
 
 const MapDetail = dynamic(() => import('@/components/MapDetail'), { ssr: false });
 
@@ -9,27 +12,51 @@ interface Props {
   params: { id: string };
 }
 
-export async function generateStaticParams() {
-  return screens.map(s => ({ id: String(s.id) }));
+// Dynamic — data đến từ TapON API (không static generate)
+export const dynamic = 'force-dynamic';
+
+async function fetchScreen(id: string): Promise<Screen | null> {
+  // 1. Thử TapON API (server-side, không qua /api route)
+  if (process.env.TAPON_CLIENT_SECRET) {
+    try {
+      const raw = await getScreen(id);
+      return mapScreen(raw);
+    } catch (err: unknown) {
+      const status = (err as { status?: number }).status;
+      if (status === 404) return null;
+      // Lỗi khác (network, auth) → fallback về mock
+      const msg = err instanceof Error ? err.message : String(err);
+      console.error('[ScreenDetail] TapON error, falling back to mock:', msg);
+    }
+  }
+
+  // 2. Fallback: mock data (dev / khi chưa cấu hình API)
+  return mockScreens.find(s => s.id === id) ?? null;
 }
 
-export default function ScreenDetailPage({ params }: Props) {
-  const screen = screens.find(s => s.id === Number(params.id));
+export default async function ScreenDetailPage({ params }: Props) {
+  const screen = await fetchScreen(params.id);
   if (!screen) notFound();
 
-  const owner = owners[screen.owner];
-  const svgPath = iconSVG[screen.venue] || '';
+  const owner    = owners[screen.owner];
+  const svgPath  = iconSVG[screen.venue] || '';
+  const oriLabel = screen.orientation === 'portrait' ? 'Portrait'
+                 : screen.orientation === 'square'   ? 'Square'
+                 : 'Landscape';
 
   const specRows = [
-    { key: 'Kích thước', val: screen.size },
-    { key: 'Loại màn', val: `${screen.type} ${screen.venue}` },
-    { key: 'Orientation', val: 'Landscape' },
+    { key: 'Kích thước',     val: screen.size },
+    { key: 'Loại màn',       val: `${screen.type} · ${screen.venue}` },
+    { key: 'Orientation',    val: oriLabel },
     { key: 'Creative types', val: 'MP4 Video, JPG/PNG Image' },
-    { key: 'Spot duration', val: '15 giây' },
-    { key: 'Loop length', val: '8 spots / loop (~120s)' },
-    { key: 'Weekly traffic', val: `${(screen.weekly / 1000).toFixed(0)},000 lượt` },
-    { key: 'Media owner', val: owner?.name || screen.owner },
+    { key: 'Spot duration',  val: `${screen.slot_duration_sec} giây` },
+    { key: 'Loop length',    val: `${screen.slots_per_loop} spots / loop` },
+    { key: 'Weekly traffic', val: screen.weekly > 0 ? `${(screen.weekly / 1000).toFixed(0)},000 lượt` : '—' },
+    { key: 'Media owner',    val: screen.owner_name || owner?.name || screen.owner },
   ];
+
+  const DAY_LABELS = ['T2', 'T3', 'T4', 'T5', 'T6', 'T7', 'CN'];
+  const DAY_KEYS   = ['mon','tue','wed','thu','fri','sat','sun'];
 
   return (
     <div className="container">
@@ -44,11 +71,17 @@ export default function ScreenDetailPage({ params }: Props) {
             <span style={{color:'var(--navy)'}}>{screen.name}</span>
           </div>
 
-          {/* Photo */}
-          <div className={`detail-photo sc-thumb-${screen.thumb}`}>
-            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1" dangerouslySetInnerHTML={{__html: svgPath}}/>
-            <div style={{position:'absolute',top:'14px',right:'14px'}}><span className="badge badge-green">● Online</span></div>
-          </div>
+          {/* Photo — ảnh thật nếu có, fallback CSS thumb */}
+          {screen.photoUrl ? (
+            <div className="detail-photo" style={{backgroundImage:`url(${screen.photoUrl})`,backgroundSize:'cover',backgroundPosition:'center'}}>
+              <div style={{position:'absolute',top:'14px',right:'14px'}}><span className="badge badge-green">● Online</span></div>
+            </div>
+          ) : (
+            <div className={`detail-photo sc-thumb-${screen.thumb}`}>
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1" dangerouslySetInnerHTML={{__html: svgPath}}/>
+              <div style={{position:'absolute',top:'14px',right:'14px'}}><span className="badge badge-green">● Online</span></div>
+            </div>
+          )}
 
           <h1 className="h2">{screen.name}</h1>
           <div style={{display:'flex',alignItems:'center',gap:'6px',marginTop:'8px',color:'var(--g500)',fontSize:'14px'}}>
@@ -59,8 +92,8 @@ export default function ScreenDetailPage({ params }: Props) {
           <div style={{display:'flex',gap:'8px',marginTop:'14px',flexWrap:'wrap'}}>
             <span className="badge badge-blue">{screen.venue}</span>
             <span className="badge badge-gray">{screen.type}</span>
-            <span className="badge badge-gray">Landscape</span>
-            <span className="badge badge-gray">15s spot</span>
+            <span className="badge badge-gray">{oriLabel}</span>
+            <span className="badge badge-gray">{screen.slot_duration_sec}s spot</span>
           </div>
 
           {/* Specs table */}
@@ -77,12 +110,19 @@ export default function ScreenDetailPage({ params }: Props) {
           <div className="mt-24">
             <div className="fw-700" style={{color:'var(--navy)',fontSize:'15px',marginBottom:'14px'}}>Giờ hoạt động</div>
             <div className="hours-grid">
-              {['T2','T3','T4','T5','T6','T7','CN'].map((d, i) => (
-                <div key={d}>
-                  <div className="hours-day-label">{d}</div>
-                  <div className={`hours-bar${i === 6 ? ' closed' : ''}`}>{i >= 4 ? '6h\n–\n24h' : (i === 6 ? '7h\n–\n22h' : '6h\n–\n23h')}</div>
-                </div>
-              ))}
+              {DAY_LABELS.map((d, i) => {
+                const isOpen = screen.operating_hours?.days?.includes(DAY_KEYS[i]);
+                const open   = screen.operating_hours?.open  ?? '08:00';
+                const close  = screen.operating_hours?.close ?? '22:00';
+                return (
+                  <div key={d}>
+                    <div className="hours-day-label">{d}</div>
+                    <div className={`hours-bar${!isOpen ? ' closed' : ''}`}>
+                      {isOpen ? `${open}\n–\n${close}` : 'Đóng'}
+                    </div>
+                  </div>
+                );
+              })}
             </div>
           </div>
         </div>
@@ -95,9 +135,27 @@ export default function ScreenDetailPage({ params }: Props) {
             {/* Blurred pricing */}
             <div className="pricing-blur-wrap">
               <div className="pricing-blur">
-                <div className="pricing-row"><div className="pricing-label">CPM</div><div><div className="pricing-big">28,000đ</div><div className="pricing-unit">/ 1,000 impressions</div></div></div>
-                <div className="pricing-row"><div className="pricing-label">USD CPM</div><div className="pricing-value">~$1.10</div></div>
-                <div className="pricing-row"><div className="pricing-label">Min. buy</div><div className="pricing-value">10 spots/ngày</div></div>
+                {screen.price_per_slot_vnd > 0 ? (
+                  <>
+                    <div className="pricing-row">
+                      <div className="pricing-label">Giá / slot</div>
+                      <div>
+                        <div className="pricing-big">{(screen.price_per_slot_vnd/1000).toFixed(0)}K đ</div>
+                        <div className="pricing-unit">/ {screen.slot_duration_sec}s spot</div>
+                      </div>
+                    </div>
+                    <div className="pricing-row">
+                      <div className="pricing-label">Min. booking</div>
+                      <div className="pricing-value">{screen.min_booking_days} ngày</div>
+                    </div>
+                  </>
+                ) : (
+                  <div className="pricing-row">
+                    <div className="pricing-label">CPM</div>
+                    <div><div className="pricing-big">28,000đ</div><div className="pricing-unit">/ 1,000 impressions</div></div>
+                  </div>
+                )}
+                <div className="pricing-row"><div className="pricing-label">Loop</div><div className="pricing-value">{screen.slots_per_loop} spots / loop</div></div>
               </div>
               <div className="pricing-overlay">
                 <svg viewBox="0 0 24 24" fill="none" stroke="var(--navy)" strokeWidth="2" width="28" height="28"><rect x="3" y="11" width="18" height="11" rx="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>
@@ -107,7 +165,10 @@ export default function ScreenDetailPage({ params }: Props) {
               </div>
             </div>
 
-            <div className="pricing-row mt-12"><div className="pricing-label">Weekly traffic</div><div className="pricing-value">{screen.weekly.toLocaleString('vi-VN')}</div></div>
+            <div className="pricing-row mt-12">
+              <div className="pricing-label">Weekly traffic</div>
+              <div className="pricing-value">{screen.weekly > 0 ? screen.weekly.toLocaleString('vi-VN') : '—'}</div>
+            </div>
             <div className="pricing-row"><div className="pricing-label">Peak hours</div><div className="pricing-value">7–9h · 17–20h</div></div>
             <div className="pricing-row"><div className="pricing-label">Trạng thái</div><div><span className="badge badge-green">● Available</span></div></div>
 
@@ -121,7 +182,7 @@ export default function ScreenDetailPage({ params }: Props) {
             </button>
           </div>
 
-          {/* Mini map in sidebar */}
+          {/* Mini map */}
           <MapDetail lat={screen.lat} lng={screen.lng} />
           <div style={{fontSize:'11px',color:'var(--g500)',textAlign:'center',marginTop:'6px'}}>{screen.loc}</div>
         </div>

@@ -238,6 +238,7 @@ select.form-control{cursor:pointer}
   background:var(--green);box-shadow:0 0 0 0 rgba(0,196,140,.5);
   animation:hb-ping 2s ease-out infinite;
 }
+@keyframes spin{to{transform:rotate(360deg)}}
 @keyframes hb-ping{
   0%{box-shadow:0 0 0 0 rgba(0,196,140,.5)}
   70%{box-shadow:0 0 0 8px rgba(0,196,140,0)}
