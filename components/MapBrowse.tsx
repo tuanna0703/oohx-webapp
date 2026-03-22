@@ -41,7 +41,7 @@ export default function MapBrowse({ screens, onScreenSelect }: Props) {
       const MCG = (window as any).L.MarkerClusterGroup || null;
       layerRef.current = MCG
         ? L.markerClusterGroup({
-            maxClusterRadius: 40,      // nhỏ hơn → cluster theo tỉnh thay vì miền
+            maxClusterRadius: 25,      // nhỏ hơn → cluster theo tỉnh thay vì miền
             chunkedLoading: true,      // render dần, không block UI
             animateAddingMarkers: false,
           })
