@@ -2,7 +2,7 @@
 import { useState, useEffect, useMemo } from 'react';
 import Link from 'next/link';
 import dynamic from 'next/dynamic';
-import { iconSVG } from '@/lib/data';
+import { iconSVG, screenHref } from '@/lib/data';
 import type { Screen } from '@/lib/types';
 
 const MapBrowse = dynamic(() => import('@/components/MapBrowse'), { ssr: false });
@@ -238,7 +238,7 @@ export default function BrowsePage() {
                   <span className="badge badge-gray">{selected.type}</span>
                   <span className="badge badge-gray">{selected.size}</span>
                 </div>
-                <Link href={`/screens/${selected.id}`} className="btn btn-primary btn-sm mt-8" style={{width:'100%',justifyContent:'center'}}>Xem chi tiết</Link>
+                <Link href={screenHref(selected.id)} className="btn btn-primary btn-sm mt-8" style={{width:'100%',justifyContent:'center'}}>Xem chi tiết</Link>
               </div>
             )}
           </div>
@@ -252,7 +252,7 @@ export default function BrowsePage() {
                 <div style={{padding:'60px',textAlign:'center',color:'var(--g500)',gridColumn:'1/-1'}}>Không tìm thấy màn hình nào.</div>
               ) : (
                 filtered.map(s => (
-                  <Link key={s.id} href={`/screens/${s.id}`} className="sc">
+                  <Link key={s.id} href={screenHref(s.id)} className="sc">
                     <div className={`sc-thumb sc-thumb-${s.thumb}`}>
                       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" width="56" height="56" dangerouslySetInnerHTML={{__html: iconSVG[s.venue] || ''}}/>
                       <div className="sc-status"><span className="badge badge-green">● Online</span></div>

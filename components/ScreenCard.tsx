@@ -1,6 +1,6 @@
 import Link from 'next/link'
 import type { Screen } from '@/lib/types'
-import { formatPrice } from '@/lib/data'
+import { formatPrice, screenHref } from '@/lib/data'
 
 interface ScreenCardProps {
   screen: Screen
@@ -33,7 +33,7 @@ export default function ScreenCard({ screen, compact = false }: ScreenCardProps)
   const venueColor = venueColors[screen.venue] || 'bg-g-100 text-g-500'
 
   return (
-    <Link href={`/screens/${screen.id}`} className="group block">
+    <Link href={screenHref(screen.id)} className="group block">
       <div className="bg-white rounded-2xl overflow-hidden border border-g-100 hover:border-blue/30 hover:shadow-xl transition-all duration-300">
         {/* Visual placeholder */}
         <div className={`relative bg-gradient-to-br ${visual.bg} flex items-center justify-center ${compact ? 'h-32' : 'h-44'}`}>

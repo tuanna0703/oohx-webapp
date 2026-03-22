@@ -1,5 +1,10 @@
 import type { Screen, Owner } from './types'
 
+// screen_id có thể chứa ':' (MAC address) — phải encode để dùng trong URL path
+export function screenHref(id: string): string {
+  return `/screens/${id.replace(/:/g, '%3A')}`
+}
+
 const DEF = { weekly: 0, price_per_slot_vnd: 0, slot_duration_sec: 15, slots_per_loop: 8, min_booking_days: 7, orientation: 'landscape' as const }
 
 export const screens: Screen[] = [

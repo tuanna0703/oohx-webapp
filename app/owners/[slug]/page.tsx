@@ -3,7 +3,7 @@ import { useState } from 'react';
 import Link from 'next/link';
 import { notFound } from 'next/navigation';
 import dynamic from 'next/dynamic';
-import { owners, screens, iconSVG } from '@/lib/data';
+import { owners, screens, iconSVG, screenHref } from '@/lib/data';
 import { toast } from '@/components/Toast';
 
 const MapOwner = dynamic(() => import('@/components/MapOwner'), { ssr: false });
@@ -121,7 +121,7 @@ export default function OwnerProfilePage({ params }: Props) {
                 </div>
                 <div className="screens-grid">
                   {myScreens.map(s => (
-                    <Link key={s.id} href={`/screens/${s.id}`} className="sc">
+                    <Link key={s.id} href={screenHref(s.id)} className="sc">
                       <div className={`sc-thumb sc-thumb-${s.thumb}`}>
                         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" width="48" height="48" dangerouslySetInnerHTML={{__html: iconSVG[s.venue] || ''}}/>
                         <div className="sc-status"><span className="badge badge-green">● Online</span></div>

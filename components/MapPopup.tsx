@@ -2,7 +2,7 @@
 
 import Link from 'next/link'
 import type { Screen } from '@/lib/types'
-import { formatPrice } from '@/lib/data'
+import { formatPrice, screenHref } from '@/lib/data'
 
 interface MapPopupProps {
   screen: Screen
@@ -47,7 +47,7 @@ export default function MapPopup({ screen, onClose }: MapPopupProps) {
           <p className="font-bold text-navy text-sm">{formatPrice(screen.weekly)}<span className="text-xs font-normal text-g-500">/tuần</span></p>
         </div>
         <Link
-          href={`/screens/${screen.id}`}
+          href={screenHref(screen.id)}
           className="px-4 py-2 bg-blue text-white text-xs font-bold rounded-lg hover:bg-blue-d transition-colors"
         >
           Xem chi tiết →

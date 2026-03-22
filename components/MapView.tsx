@@ -103,7 +103,7 @@ export default function MapView({
               <span style="padding:2px 8px;background:#F7F8FC;color:#3D4063;border-radius:20px;font-size:11px">${screen.size}</span>
             </div>
             <div style="font-size:13px;font-weight:700;color:#0D0F2B">${formatPrice(screen.weekly)}<span style="font-weight:400;color:#737899;font-size:11px">/tuần</span></div>
-            <a href="/screens/${screen.id}" style="display:block;margin-top:10px;text-align:center;padding:7px;background:#3B47F0;color:white;border-radius:8px;font-size:12px;font-weight:600;text-decoration:none">Xem chi tiết →</a>
+            <a href="/screens/${screen.id.replace(/:/g, '%3A')}" style="display:block;margin-top:10px;text-align:center;padding:7px;background:#3B47F0;color:white;border-radius:8px;font-size:12px;font-weight:600;text-decoration:none">Xem chi tiết →</a>
           </div>
         `)
 
