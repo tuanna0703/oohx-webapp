@@ -1,8 +1,13 @@
 import type { Screen, Owner } from './types'
 
-// screen_id có thể chứa ':' (MAC address) — phải encode để dùng trong URL path
+// screen_id có thể chứa ':' (MAC address) — thay bằng '~' trong URL (safe, không cần encode)
 export function screenHref(id: string): string {
-  return `/screens/${id.replace(/:/g, '%3A')}`
+  return `/screens/${id.replace(/:/g, '~')}`
+}
+
+// Decode URL param '~' → ':' để lấy lại screen_id gốc
+export function decodeScreenId(param: string): string {
+  return param.replace(/~/g, ':')
 }
 
 const DEF = { weekly: 0, price_per_slot_vnd: 0, slot_duration_sec: 15, slots_per_loop: 8, min_booking_days: 7, orientation: 'landscape' as const }

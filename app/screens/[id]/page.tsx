@@ -1,7 +1,7 @@
 import Link from 'next/link';
 import { notFound } from 'next/navigation';
 import dynamicImport from 'next/dynamic';
-import { screens as mockScreens, owners, iconSVG } from '@/lib/data';
+import { screens as mockScreens, owners, iconSVG, decodeScreenId } from '@/lib/data';
 import { getScreen } from '@/lib/tapon/inventory';
 import { mapScreen } from '@/lib/tapon/mapper';
 import type { Screen } from '@/lib/types';
@@ -37,7 +37,7 @@ async function fetchScreen(id: string): Promise<Screen | null> {
 }
 
 export default async function ScreenDetailPage({ params }: Props) {
-  const screen = await fetchScreen(params.id);
+  const screen = await fetchScreen(decodeScreenId(params.id));
   if (!screen) notFound();
 
   const owner    = owners[screen.owner];
