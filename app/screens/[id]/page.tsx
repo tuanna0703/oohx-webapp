@@ -23,10 +23,13 @@ async function fetchScreen(id: string): Promise<Screen | null> {
       return mapScreen(raw);
     } catch (err: unknown) {
       const status = (err as { status?: number }).status;
+      // TapON xác nhận không tồn tại → trả null (hiện 404)
       if (status === 404) return null;
-      // Lỗi khác (network, auth) → fallback về mock
-      const msg = err instanceof Error ? err.message : String(err);
-      console.error('[ScreenDetail] TapON error, falling back to mock:', msg);
+      // Lỗi runtime / network → log chi tiết để debug, KHÔNG hiện 404
+      const msg = err instanceof Error ? `${err.message}\n${err.stack}` : String(err);
+      console.error(`[ScreenDetail] id=${id} | error:`, msg);
+      // Re-throw để Next.js hiện error page thay vì 404 misleading
+      throw err;
     }
   }
 

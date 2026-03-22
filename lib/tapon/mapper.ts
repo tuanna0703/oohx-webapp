@@ -67,8 +67,8 @@ function buildLoc(s: TapOnScreen): string {
 // ─── Main mapper ──────────────────────────────────────────────────────────────
 
 export function mapScreen(s: TapOnScreen): Screen {
-  const venue = VENUE_MAP[s.venue_type] ?? s.venue_type
-  const type  = TYPE_MAP[s.screen_type] ?? s.screen_type.toUpperCase()
+  const venue = VENUE_MAP[s.venue_type] ?? s.venue_type ?? 'Outdoor'
+  const type  = TYPE_MAP[s.screen_type] ?? s.screen_type?.toUpperCase() ?? 'LCD'
 
   return {
     id:                s.screen_id,
