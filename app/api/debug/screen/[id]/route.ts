@@ -47,14 +47,12 @@ export async function GET(_req: NextRequest, { params }: { params: { id: string 
       result.screen_status = screenRes.status
       result.screen_ok = screenRes.ok
 
-      if (screenRes.ok) {
-        const data = await screenRes.json()
-        result.screen_id   = data.screen_id
-        result.screen_name = data.name
-        result.screen_type = data.screen_type
-        result.venue_type  = data.venue_type
-      } else {
-        result.screen_error = await screenRes.text()
+      // Trả toàn bộ raw body để xem cấu trúc thật
+      const rawText = await screenRes.text()
+      try {
+        result.screen_body = JSON.parse(rawText)
+      } catch {
+        result.screen_body_raw = rawText
       }
     } else {
       result.auth_error = authBody
