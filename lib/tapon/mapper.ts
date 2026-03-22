@@ -6,12 +6,16 @@ import type { Screen } from '../types'
 
 // ─── Lookup maps ──────────────────────────────────────────────────────────────
 
-const VENUE_MAP: Record<TapOnScreen['venue_type'], string> = {
-  mall:    'Retail',
-  outdoor: 'Outdoor',
-  fnb:     'F&B',
-  transit: 'Transit',
-  office:  'Office',
+// venue_type từ TapON là string mô tả tự do, vd: "Malls : Concourse", "Outdoor : Billboard"
+function mapVenue(raw: string | null | undefined): string {
+  if (!raw) return 'Outdoor'
+  const v = raw.toLowerCase()
+  if (v.includes('mall') || v.includes('retail') || v.includes('shop') || v.includes('supermarket')) return 'Retail'
+  if (v.includes('f&b') || v.includes('fnb') || v.includes('food') || v.includes('coffee') || v.includes('restaurant')) return 'F&B'
+  if (v.includes('transit') || v.includes('airport') || v.includes('station') || v.includes('bus')) return 'Transit'
+  if (v.includes('office') || v.includes('building') || v.includes('tower') || v.includes('corporate')) return 'Office'
+  if (v.includes('outdoor') || v.includes('billboard') || v.includes('street') || v.includes('road')) return 'Outdoor'
+  return raw  // fallback: giữ nguyên giá trị TapON
 }
 
 const TYPE_MAP: Record<TapOnScreen['screen_type'], string> = {
@@ -54,21 +58,22 @@ function buildSize(s: TapOnScreen): string {
 // ─── Location string ──────────────────────────────────────────────────────────
 
 function buildLoc(s: TapOnScreen): string {
-  const { district, city } = s.location
+  const { address, district, city } = s.location
   const cityLabel: Record<string, string> = {
     hanoi:  'Hà Nội',
     hcm:    'TP. Hồ Chí Minh',
     danang: 'Đà Nẵng',
   }
-  const cityName = cityLabel[city] ?? city
-  return district ? `${district}, ${cityName}` : cityName
+  const cityName = city ? (cityLabel[city] ?? city) : null
+  const parts = [address, district, cityName].filter(Boolean)
+  return parts.length > 0 ? parts.join(', ') : 'Việt Nam'
 }
 
 // ─── Main mapper ──────────────────────────────────────────────────────────────
 
 export function mapScreen(s: TapOnScreen): Screen {
-  const venue = VENUE_MAP[s.venue_type] ?? s.venue_type ?? 'Outdoor'
-  const type  = TYPE_MAP[s.screen_type] ?? s.screen_type?.toUpperCase() ?? 'LCD'
+  const venue = mapVenue(s.venue_type)
+  const type  = TYPE_MAP[s.screen_type as keyof typeof TYPE_MAP] ?? s.screen_type?.toUpperCase() ?? 'LCD'
 
   return {
     id:                s.screen_id,

@@ -8,8 +8,8 @@ export interface TapOnScreen {
   name: string
   owner_id: string
   owner_name: string
-  screen_type: 'lcd' | 'led' | 'billboard'
-  venue_type: 'mall' | 'outdoor' | 'fnb' | 'transit' | 'office'
+  screen_type: 'lcd' | 'led' | 'billboard' | string
+  venue_type: string  // TapON trả về string mô tả, vd: "Malls : Concourse"
   location: {
     address: string
     city: string

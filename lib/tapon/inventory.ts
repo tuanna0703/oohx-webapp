@@ -55,7 +55,9 @@ export async function getAllScreens(
 
 export async function getScreen(screenId: string): Promise<TapOnScreen> {
   if (!screenId) throw new Error('screenId is required')
-  // encodeURIComponent sẽ encode ':' → '%3A' làm TapON không nhận ra screen_id dạng MAC address
-  // Dùng encodeURI để giữ nguyên ':' trong path segment
-  return sspFetchJson<TapOnScreen>(`/inventory/screens/${encodeURI(screenId)}`)
+  // Single screen API trả về { data: TapOnScreen } — cần unwrap
+  const res = await sspFetchJson<{ data: TapOnScreen }>(
+    `/inventory/screens/${encodeURI(screenId)}`
+  )
+  return res.data
 }
