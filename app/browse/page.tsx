@@ -112,7 +112,7 @@ export default function BrowsePage() {
   }
 
   return (
-    <div className="browse-wrap">
+    <div className={`browse-wrap${view === 'list' ? ' browse-list-mode' : ''}`}>
       {/* Filter panel */}
       {filterPanel && (
         <div className="filter-panel" id="filter-panel">
