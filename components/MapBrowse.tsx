@@ -39,7 +39,13 @@ export default function MapBrowse({ screens, onScreenSelect }: Props) {
       layerRef.current.clearLayers();
     } else {
       const MCG = (window as any).L.MarkerClusterGroup || null;
-      layerRef.current = MCG ? L.markerClusterGroup() : L.layerGroup();
+      layerRef.current = MCG
+        ? L.markerClusterGroup({
+            maxClusterRadius: 40,      // nhỏ hơn → cluster theo tỉnh thay vì miền
+            chunkedLoading: true,      // render dần, không block UI
+            animateAddingMarkers: false,
+          })
+        : L.layerGroup();
       mapRef.current.addLayer(layerRef.current);
     }
 
