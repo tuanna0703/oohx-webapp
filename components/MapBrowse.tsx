@@ -74,8 +74,8 @@ export default function MapBrowse({ screens, onScreenSelect }: Props) {
       layerRef.current.addLayer(marker);
     });
 
-    setTimeout(() => mapRef.current?.invalidateSize(), 50);
+    setTimeout(() => mapRef.current?.invalidateSize(), 150);
   }, [screens, onScreenSelect]);
 
-  return <div ref={ref} id="leaflet-map" style={{flex:1,minHeight:0}}/>;
+  return <div ref={ref} id="leaflet-map" />;
 }
