@@ -29,7 +29,8 @@ export default function MapBrowse({ screens, onScreenSelect }: Props) {
       L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
         attribution: '© OpenStreetMap', maxZoom: 18,
       }).addTo(map);
-      map.setView([16.0, 106.0], 6);
+      // Fit Vietnam bounding box: SW [8.4, 102.1] → NE [23.4, 109.5]
+      map.fitBounds([[8.4, 102.1], [23.4, 109.5]], { padding: [24, 24] });
       mapRef.current = map;
     }
 
