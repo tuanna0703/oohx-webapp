@@ -1,7 +1,7 @@
 import Link from 'next/link';
 import { notFound } from 'next/navigation';
 import dynamicImport from 'next/dynamic';
-import { screens as mockScreens, owners, iconSVG, decodeScreenId } from '@/lib/data';
+import { owners, iconSVG, decodeScreenId } from '@/lib/data';
 import { getScreen } from '@/lib/tapon/inventory';
 import { mapScreen } from '@/lib/tapon/mapper';
 import type { Screen } from '@/lib/types';
@@ -16,24 +16,15 @@ interface Props {
 export const dynamic = 'force-dynamic';
 
 async function fetchScreen(id: string): Promise<Screen | null> {
-  // 1. Thử TapON API (server-side, không qua /api route)
-  if (process.env.TAPON_CLIENT_SECRET) {
-    try {
-      const raw = await getScreen(id);
-      return mapScreen(raw);
-    } catch (err: unknown) {
-      const status = (err as { status?: number }).status;
-      if (status !== 404) {
-        // Lỗi network/auth → re-throw, hiện error page
-        console.error(`[ScreenDetail] id=${id}`, err);
-        throw err;
-      }
-      // TapON 404 → fall through xuống mock data
-    }
+  try {
+    const raw = await getScreen(id);
+    return mapScreen(raw);
+  } catch (err: unknown) {
+    const status = (err as { status?: number }).status;
+    if (status === 404) return null;
+    console.error(`[ScreenDetail] id=${id}`, err);
+    throw err;
   }
-
-  // 2. Fallback: mock data (dev / ID không có trên TapON)
-  return mockScreens.find(s => s.id === id) ?? null;
 }
 
 export default async function ScreenDetailPage({ params }: Props) {
