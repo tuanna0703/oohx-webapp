@@ -23,17 +23,16 @@ async function fetchScreen(id: string): Promise<Screen | null> {
       return mapScreen(raw);
     } catch (err: unknown) {
       const status = (err as { status?: number }).status;
-      // TapON xác nhận không tồn tại → trả null (hiện 404)
-      if (status === 404) return null;
-      // Lỗi runtime / network → log chi tiết để debug, KHÔNG hiện 404
-      const msg = err instanceof Error ? `${err.message}\n${err.stack}` : String(err);
-      console.error(`[ScreenDetail] id=${id} | error:`, msg);
-      // Re-throw để Next.js hiện error page thay vì 404 misleading
-      throw err;
+      if (status !== 404) {
+        // Lỗi network/auth → re-throw, hiện error page
+        console.error(`[ScreenDetail] id=${id}`, err);
+        throw err;
+      }
+      // TapON 404 → fall through xuống mock data
     }
   }
 
-  // 2. Fallback: mock data (dev / khi chưa cấu hình API)
+  // 2. Fallback: mock data (dev / ID không có trên TapON)
   return mockScreens.find(s => s.id === id) ?? null;
 }
 
