@@ -76,10 +76,11 @@ export default function MapBrowse({ screens, onScreenSelect }: Props) {
 
       const marker = new AdvancedMarkerElement({
         position: { lat: s.lat, lng: s.lng },
-        content: pin.element,
+        content: pin,
+        map,
       });
 
-      marker.addListener('click', () => {
+      marker.addListener('gmp-click', () => {
         infoWindow.setContent(`
           <div style="font-family:'Open Sans',sans-serif;padding:12px;min-width:200px;max-width:240px">
             <div style="font-weight:700;font-size:13px;color:#0D0F2B;margin-bottom:4px">${s.name}</div>
