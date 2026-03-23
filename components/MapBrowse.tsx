@@ -35,6 +35,8 @@ export default function MapBrowse({ screens, onScreenSelect }: Props) {
     if (!isLoaded || !containerRef.current || mapRef.current) return;
 
     const map = new google.maps.Map(containerRef.current, {
+      center:           { lat: 16.0, lng: 106.0 }, // Trung tâm Việt Nam — tránh geolocation request
+      zoom:             6,
       mapTypeControl:   false,
       streetViewControl: false,
       fullscreenControl: false,
