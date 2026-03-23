@@ -102,8 +102,35 @@ export default function MapBrowse({ screens, onScreenSelect }: Props) {
       return marker;
     });
 
-    markersRef.current  = markers;
-    clustererRef.current = new MarkerClusterer({ map, markers });
+    markersRef.current = markers;
+
+    // Custom renderer dùng Marker thay vì AdvancedMarkerElement (tránh lỗi mapId)
+    const renderer = {
+      render({ count, position }: { count: number; position: google.maps.LatLng }) {
+        const size   = count > 500 ? 56 : count > 100 ? 48 : 40;
+        const color  = count > 500 ? '#E8430A' : count > 100 ? '#FF6B35' : '#3B47F0';
+        return new google.maps.Marker({
+          position,
+          icon: {
+            path:        google.maps.SymbolPath.CIRCLE,
+            fillColor:   color,
+            fillOpacity: 1,
+            strokeColor: '#fff',
+            strokeWeight: 2,
+            scale:       size / 5,
+          },
+          label: {
+            text:     String(count),
+            color:    '#fff',
+            fontSize: '12px',
+            fontWeight: '700',
+          },
+          zIndex: 1000 + count,
+        });
+      },
+    };
+
+    clustererRef.current = new MarkerClusterer({ map, markers, renderer });
   }, [screens, onScreenSelect, isLoaded]);
 
   if (!isLoaded) {
