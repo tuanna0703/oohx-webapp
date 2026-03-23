@@ -16,7 +16,7 @@ const colorMap: Record<string, string> = {
   orange: '#FF6B35',
 };
 
-const LIBRARIES: ('places')[] = [];
+const LIBRARIES: ('marker')[] = ['marker'];
 
 export default function MapBrowse({ screens, onScreenSelect }: Props) {
   const { isLoaded } = useLoadScript({
@@ -28,22 +28,20 @@ export default function MapBrowse({ screens, onScreenSelect }: Props) {
   const mapRef        = useRef<google.maps.Map | null>(null);
   const clustererRef  = useRef<MarkerClusterer | null>(null);
   const infoWindowRef = useRef<google.maps.InfoWindow | null>(null);
+  const markersRef    = useRef<google.maps.marker.AdvancedMarkerElement[]>([]);
 
   // Khởi tạo map một lần
   useEffect(() => {
     if (!isLoaded || !containerRef.current || mapRef.current) return;
 
     const map = new google.maps.Map(containerRef.current, {
+      mapId: process.env.NEXT_PUBLIC_GOOGLE_MAPS_MAP_ID,
       mapTypeControl: false,
       streetViewControl: false,
       fullscreenControl: false,
       zoomControlOptions: { position: google.maps.ControlPosition.LEFT_TOP },
-      styles: [
-        { featureType: 'poi', elementType: 'labels', stylers: [{ visibility: 'off' }] },
-      ],
     });
 
-    // Fit Vietnam bounds
     map.fitBounds(
       new google.maps.LatLngBounds({ lat: 8.4, lng: 102.1 }, { lat: 23.4, lng: 109.5 })
     );
@@ -56,25 +54,29 @@ export default function MapBrowse({ screens, onScreenSelect }: Props) {
   useEffect(() => {
     if (!mapRef.current || !isLoaded) return;
 
-    // Xoá clusterer cũ
+    // Xoá clusterer + markers cũ
     clustererRef.current?.clearMarkers();
+    markersRef.current.forEach(m => { m.map = null });
+    markersRef.current = [];
 
     const map = mapRef.current;
     const infoWindow = infoWindowRef.current!;
 
+    const { AdvancedMarkerElement, PinElement } = google.maps.marker;
+
     const markers = screens.map(s => {
       const color = colorMap[s.color] || '#3B47F0';
 
-      const marker = new google.maps.Marker({
+      const pin = new PinElement({
+        background: color,
+        borderColor: '#fff',
+        glyphColor: '#fff',
+        scale: 0.85,
+      });
+
+      const marker = new AdvancedMarkerElement({
         position: { lat: s.lat, lng: s.lng },
-        icon: {
-          path: google.maps.SymbolPath.CIRCLE,
-          fillColor: color,
-          fillOpacity: 1,
-          strokeColor: '#fff',
-          strokeWeight: 2,
-          scale: 7,
-        },
+        content: pin.element,
       });
 
       marker.addListener('click', () => {
@@ -99,6 +101,7 @@ export default function MapBrowse({ screens, onScreenSelect }: Props) {
       return marker;
     });
 
+    markersRef.current = markers;
     clustererRef.current = new MarkerClusterer({ map, markers });
   }, [screens, onScreenSelect, isLoaded]);
 
