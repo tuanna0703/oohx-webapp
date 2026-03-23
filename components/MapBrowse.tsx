@@ -1,6 +1,5 @@
 'use client';
-import { useEffect, useRef } from 'react';
-import { useLoadScript } from '@react-google-maps/api';
+import { useEffect, useRef, useState } from 'react';
 import { MarkerClusterer } from '@googlemaps/markerclusterer';
 import type { Screen } from '@/lib/types';
 import { screenHref } from '@/lib/data';
@@ -16,28 +15,34 @@ const colorMap: Record<string, string> = {
   orange: '#FF6B35',
 };
 
-const LIBRARIES: never[] = [];
-
 export default function MapBrowse({ screens, onScreenSelect }: Props) {
-  const { isLoaded } = useLoadScript({
-    googleMapsApiKey: process.env.NEXT_PUBLIC_GOOGLE_MAPS_KEY!,
-    libraries: LIBRARIES,
-  });
+  const containerRef   = useRef<HTMLDivElement>(null);
+  const mapRef         = useRef<google.maps.Map | null>(null);
+  const clustererRef   = useRef<MarkerClusterer | null>(null);
+  const infoWindowRef  = useRef<google.maps.InfoWindow | null>(null);
+  const markersRef     = useRef<google.maps.Marker[]>([]);
+  const [ready, setReady] = useState(false);
 
-  const containerRef  = useRef<HTMLDivElement>(null);
-  const mapRef        = useRef<google.maps.Map | null>(null);
-  const clustererRef  = useRef<MarkerClusterer | null>(null);
-  const infoWindowRef = useRef<google.maps.InfoWindow | null>(null);
-  const markersRef    = useRef<google.maps.Marker[]>([]);
-
-  // Khởi tạo map một lần
+  // Chờ Google Maps SDK load xong
   useEffect(() => {
-    if (!isLoaded || !containerRef.current || mapRef.current) return;
+    function checkGoogle() {
+      if (typeof window !== 'undefined' && window.google?.maps) {
+        setReady(true);
+      } else {
+        setTimeout(checkGoogle, 100);
+      }
+    }
+    checkGoogle();
+  }, []);
+
+  // Khởi tạo map một lần khi SDK sẵn sàng
+  useEffect(() => {
+    if (!ready || !containerRef.current || mapRef.current) return;
 
     const map = new google.maps.Map(containerRef.current, {
-      center:           { lat: 16.0, lng: 106.0 }, // Trung tâm Việt Nam — tránh geolocation request
-      zoom:             6,
-      mapTypeControl:   false,
+      center:            { lat: 16.0, lng: 106.0 },
+      zoom:              6,
+      mapTypeControl:    false,
       streetViewControl: false,
       fullscreenControl: false,
       zoomControlOptions: { position: google.maps.ControlPosition.LEFT_TOP },
@@ -52,17 +57,17 @@ export default function MapBrowse({ screens, onScreenSelect }: Props) {
 
     infoWindowRef.current = new google.maps.InfoWindow();
     mapRef.current = map;
-  }, [isLoaded]);
+  }, [ready]);
 
   // Cập nhật markers khi screens thay đổi
   useEffect(() => {
-    if (!mapRef.current || !isLoaded) return;
+    if (!mapRef.current || !ready) return;
 
     clustererRef.current?.clearMarkers();
     markersRef.current.forEach(m => m.setMap(null));
     markersRef.current = [];
 
-    const map       = mapRef.current;
+    const map        = mapRef.current;
     const infoWindow = infoWindowRef.current!;
 
     const markers = screens.map(s => {
@@ -71,12 +76,12 @@ export default function MapBrowse({ screens, onScreenSelect }: Props) {
       const marker = new google.maps.Marker({
         position: { lat: s.lat, lng: s.lng },
         icon: {
-          path:          google.maps.SymbolPath.CIRCLE,
-          fillColor:     color,
-          fillOpacity:   1,
-          strokeColor:   '#fff',
-          strokeWeight:  2,
-          scale:         7,
+          path:         google.maps.SymbolPath.CIRCLE,
+          fillColor:    color,
+          fillOpacity:  1,
+          strokeColor:  '#fff',
+          strokeWeight: 2,
+          scale:        7,
         },
       });
 
@@ -104,25 +109,24 @@ export default function MapBrowse({ screens, onScreenSelect }: Props) {
 
     markersRef.current = markers;
 
-    // Custom renderer dùng Marker thay vì AdvancedMarkerElement (tránh lỗi mapId)
+    // Custom renderer tránh AdvancedMarkerElement (cần mapId)
     const renderer = {
       render({ count, position }: { count: number; position: google.maps.LatLng }) {
-        const size   = count > 500 ? 56 : count > 100 ? 48 : 40;
-        const color  = count > 500 ? '#E8430A' : count > 100 ? '#FF6B35' : '#3B47F0';
+        const color = count > 500 ? '#E8430A' : count > 100 ? '#FF6B35' : '#3B47F0';
         return new google.maps.Marker({
           position,
           icon: {
-            path:        google.maps.SymbolPath.CIRCLE,
-            fillColor:   color,
-            fillOpacity: 1,
-            strokeColor: '#fff',
+            path:         google.maps.SymbolPath.CIRCLE,
+            fillColor:    color,
+            fillOpacity:  1,
+            strokeColor:  '#fff',
             strokeWeight: 2,
-            scale:       size / 5,
+            scale:        count > 500 ? 22 : count > 100 ? 18 : 14,
           },
           label: {
-            text:     String(count),
-            color:    '#fff',
-            fontSize: '12px',
+            text:       String(count),
+            color:      '#fff',
+            fontSize:   '11px',
             fontWeight: '700',
           },
           zIndex: 1000 + count,
@@ -131,12 +135,12 @@ export default function MapBrowse({ screens, onScreenSelect }: Props) {
     };
 
     clustererRef.current = new MarkerClusterer({ map, markers, renderer });
-  }, [screens, onScreenSelect, isLoaded]);
+  }, [screens, onScreenSelect, ready]);
 
-  if (!isLoaded) {
+  if (!ready) {
     return (
-      <div id="leaflet-map" style={{ display:'flex', alignItems:'center', justifyContent:'center', background:'#f7f8fc', color:'#737899', fontSize:'14px', gap:'8px' }}>
-        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" style={{ animation:'spin 1s linear infinite' }}>
+      <div id="leaflet-map" style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', background: '#f7f8fc', color: '#737899', fontSize: '14px', gap: '8px' }}>
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" style={{ animation: 'spin 1s linear infinite' }}>
           <path d="M21 12a9 9 0 1 1-6.219-8.56"/>
         </svg>
         Đang tải bản đồ...
