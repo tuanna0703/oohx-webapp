@@ -1,0 +1,23 @@
+<!DOCTYPE html>
+<html>
+<head><meta charset="utf-8"><title>Map Test</title></head>
+<body>
+<h3 id="status" style="font-family:monospace">Loading...</h3>
+<div id="map" style="width:100%;height:500px"></div>
+<script>
+  window.initMap = function() {
+    new google.maps.Map(document.getElementById('map'), {
+      center: { lat: 16.0, lng: 106.0 },
+      zoom: 6
+    });
+    document.getElementById('status').innerText = '✅ Map OK';
+    document.getElementById('status').style.color = 'green';
+  };
+  window.gm_authFailure = function() {
+    document.getElementById('status').innerText = '❌ Auth Failure — API key bị từ chối';
+    document.getElementById('status').style.color = 'red';
+  };
+</script>
+<script src="https://maps.googleapis.com/maps/api/js?key=AIzaSyDIPFxHr29Hyxv0C96qSjj0wcgXHuBpELU&callback=initMap&v=weekly" async></script>
+</body>
+</html>
