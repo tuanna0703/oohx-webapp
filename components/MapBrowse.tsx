@@ -11,12 +11,12 @@ interface Props {
 }
 
 const colorMap: Record<string, string> = {
-  green: '#00C48C',
-  blue: '#3B47F0',
+  green:  '#00C48C',
+  blue:   '#3B47F0',
   orange: '#FF6B35',
 };
 
-const LIBRARIES: ('marker')[] = ['marker'];
+const LIBRARIES: never[] = [];
 
 export default function MapBrowse({ screens, onScreenSelect }: Props) {
   const { isLoaded } = useLoadScript({
@@ -28,18 +28,20 @@ export default function MapBrowse({ screens, onScreenSelect }: Props) {
   const mapRef        = useRef<google.maps.Map | null>(null);
   const clustererRef  = useRef<MarkerClusterer | null>(null);
   const infoWindowRef = useRef<google.maps.InfoWindow | null>(null);
-  const markersRef    = useRef<google.maps.marker.AdvancedMarkerElement[]>([]);
+  const markersRef    = useRef<google.maps.Marker[]>([]);
 
   // Khởi tạo map một lần
   useEffect(() => {
     if (!isLoaded || !containerRef.current || mapRef.current) return;
 
     const map = new google.maps.Map(containerRef.current, {
-      mapId: process.env.NEXT_PUBLIC_GOOGLE_MAPS_MAP_ID,
-      mapTypeControl: false,
+      mapTypeControl:   false,
       streetViewControl: false,
       fullscreenControl: false,
       zoomControlOptions: { position: google.maps.ControlPosition.LEFT_TOP },
+      styles: [
+        { featureType: 'poi', elementType: 'labels', stylers: [{ visibility: 'off' }] },
+      ],
     });
 
     map.fitBounds(
@@ -54,33 +56,29 @@ export default function MapBrowse({ screens, onScreenSelect }: Props) {
   useEffect(() => {
     if (!mapRef.current || !isLoaded) return;
 
-    // Xoá clusterer + markers cũ
     clustererRef.current?.clearMarkers();
-    markersRef.current.forEach(m => { m.map = null });
+    markersRef.current.forEach(m => m.setMap(null));
     markersRef.current = [];
 
-    const map = mapRef.current;
+    const map       = mapRef.current;
     const infoWindow = infoWindowRef.current!;
 
-    const { AdvancedMarkerElement, PinElement } = google.maps.marker;
-
     const markers = screens.map(s => {
-      const color = colorMap[s.color] || '#3B47F0';
+      const color = colorMap[s.color] ?? '#3B47F0';
 
-      const pin = new PinElement({
-        background: color,
-        borderColor: '#fff',
-        glyphColor: '#fff',
-        scale: 0.85,
-      });
-
-      const marker = new AdvancedMarkerElement({
+      const marker = new google.maps.Marker({
         position: { lat: s.lat, lng: s.lng },
-        content: pin,
-        map,
+        icon: {
+          path:          google.maps.SymbolPath.CIRCLE,
+          fillColor:     color,
+          fillOpacity:   1,
+          strokeColor:   '#fff',
+          strokeWeight:  2,
+          scale:         7,
+        },
       });
 
-      marker.addListener('gmp-click', () => {
+      marker.addListener('click', () => {
         infoWindow.setContent(`
           <div style="font-family:'Open Sans',sans-serif;padding:12px;min-width:200px;max-width:240px">
             <div style="font-weight:700;font-size:13px;color:#0D0F2B;margin-bottom:4px">${s.name}</div>
@@ -102,14 +100,14 @@ export default function MapBrowse({ screens, onScreenSelect }: Props) {
       return marker;
     });
 
-    markersRef.current = markers;
+    markersRef.current  = markers;
     clustererRef.current = new MarkerClusterer({ map, markers });
   }, [screens, onScreenSelect, isLoaded]);
 
   if (!isLoaded) {
     return (
-      <div id="leaflet-map" style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', background: '#f7f8fc', color: '#737899', fontSize: '14px', gap: '8px' }}>
-        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" style={{ animation: 'spin 1s linear infinite' }}>
+      <div id="leaflet-map" style={{ display:'flex', alignItems:'center', justifyContent:'center', background:'#f7f8fc', color:'#737899', fontSize:'14px', gap:'8px' }}>
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" style={{ animation:'spin 1s linear infinite' }}>
           <path d="M21 12a9 9 0 1 1-6.219-8.56"/>
         </svg>
         Đang tải bản đồ...
