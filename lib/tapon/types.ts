@@ -90,9 +90,13 @@ export interface ScreenListParams {
   page?: number
   limit?: number
   city?: string | string[]
+  region?: string | string[]
+  district?: string | string[]
   venue_type?: string | string[]
   screen_type?: string | string[]
   orientation?: string | string[]
+  network?: string | string[]
+  owner?: string | string[]
   q?: string
   sort?: 'price_asc' | 'price_desc' | 'newest'
   status?: 'active' | 'inactive'
@@ -150,6 +154,46 @@ export interface OwnersListResponse {
   page:  number
   limit: number
   data:  TapOnOwner[]
+}
+
+// ─── Networks ─────────────────────────────────────────────────────────────────
+
+export interface NetworkItem {
+  code:         string
+  name:         string
+  screen_count: number
+}
+
+export interface NetworksResponse {
+  data: NetworkItem[]
+}
+
+// ─── Locations ────────────────────────────────────────────────────────────────
+
+export interface RegionItem {
+  code:  string   // north | central | south
+  name:  string   // Miền Bắc | Miền Trung | Miền Nam
+  count: number
+}
+
+export interface ProvinceItem {
+  code:   string  // hanoi | hcm | danang ...
+  name:   string
+  region: string  // → RegionItem.code
+  count:  number
+}
+
+export interface DistrictItem {
+  code:     string  // slug: cau-giay | quan-1 ...
+  name:     string
+  province: string  // → ProvinceItem.code
+  count:    number
+}
+
+export interface LocationsResponse {
+  regions:   RegionItem[]
+  provinces: ProvinceItem[]
+  districts: DistrictItem[]
 }
 
 // ─── Map endpoint ─────────────────────────────────────────────────────────────

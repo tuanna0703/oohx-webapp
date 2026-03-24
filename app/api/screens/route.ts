@@ -37,17 +37,24 @@ export async function GET(req: NextRequest) {
 
   const fetchAll     = sp.get('all') === 'true'
   const cities       = getParamValues(sp, 'city')
+  const regions      = getParamValues(sp, 'region')
+  const districts    = getParamValues(sp, 'district')
   const venue_types  = getParamValues(sp, 'venue_type')
   const screen_types = getParamValues(sp, 'screen_type')
   const orientations = getParamValues(sp, 'orientation')
+  const networks     = getParamValues(sp, 'network')
+  const owners       = getParamValues(sp, 'owner')
   const q            = sp.get('q')    || ''
   const sort         = sp.get('sort') || ''
   const page         = sp.has('page')  ? Number(sp.get('page'))  : 1
   const limit        = sp.has('limit') ? Number(sp.get('limit')) : 20
 
-  const cacheKey = fetchAll
-    ? `map:${cities.join(',')}:${venue_types.join(',')}:${screen_types.join(',')}:${orientations.join(',')}:${q}:${sort}`
-    : `list:${page}:${limit}:${cities.join(',')}:${venue_types.join(',')}:${screen_types.join(',')}:${orientations.join(',')}:${q}:${sort}`
+  const filterKey = [
+    cities.join(','), regions.join(','), districts.join(','),
+    venue_types.join(','), screen_types.join(','), orientations.join(','),
+    networks.join(','), owners.join(','), q, sort,
+  ].join('|')
+  const cacheKey = fetchAll ? `map:${filterKey}` : `list:${page}:${limit}:${filterKey}`
 
   const hit = getCached<object>(cacheKey)
   if (hit) {
@@ -59,9 +66,13 @@ export async function GET(req: NextRequest) {
   const baseParams: Omit<ScreenListParams, 'page' | 'limit'> = {
     status:      'active',
     city:        cities.length       > 0 ? cities       : undefined,
+    region:      regions.length      > 0 ? regions      : undefined,
+    district:    districts.length    > 0 ? districts    : undefined,
     venue_type:  venue_types.length  > 0 ? venue_types  : undefined,
     screen_type: screen_types.length > 0 ? screen_types : undefined,
     orientation: orientations.length > 0 ? orientations : undefined,
+    network:     networks.length     > 0 ? networks     : undefined,
+    owner:       owners.length       > 0 ? owners       : undefined,
     q:           q    || undefined,
     sort:        (sort || undefined) as ScreenListParams['sort'],
   }

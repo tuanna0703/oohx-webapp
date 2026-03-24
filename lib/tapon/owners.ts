@@ -9,6 +9,7 @@ export interface OwnersParams {
   featured?: boolean
   limit?:    number
   page?:     number
+  q?:        string
 }
 
 export async function getOwners(params: OwnersParams = {}): Promise<OwnersListResponse> {
@@ -16,6 +17,7 @@ export async function getOwners(params: OwnersParams = {}): Promise<OwnersListRe
   if (params.featured !== undefined) qs.set('featured', String(params.featured))
   if (params.limit    !== undefined) qs.set('limit',    String(params.limit))
   if (params.page     !== undefined) qs.set('page',     String(params.page))
+  if (params.q)                      qs.set('q',        params.q)
   const query = qs.toString() ? `?${qs}` : ''
   return sspFetchJson<OwnersListResponse>(`/inventory/owners${query}`)
 }

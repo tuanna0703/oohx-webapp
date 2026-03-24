@@ -3,7 +3,7 @@
 // GET /inventory/screens/:screen_id
 
 import { sspFetchJson } from './client'
-import type { TapOnScreen, TapOnListResponse, MapScreenItem, ScreenListParams } from './types'
+import type { TapOnScreen, TapOnListResponse, MapScreenItem, ScreenListParams, NetworkItem, NetworksResponse, LocationsResponse } from './types'
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
@@ -26,9 +26,13 @@ function buildQS(params: ScreenListParams): string {
   if (params.sort)                       qs.set('sort',          params.sort)
   if (params.updated_after)              qs.set('updated_after', params.updated_after)
   appendParam(qs, 'city',         params.city)
+  appendParam(qs, 'region',       params.region)
+  appendParam(qs, 'district',     params.district)
   appendParam(qs, 'venue_type',   params.venue_type)
   appendParam(qs, 'screen_type',  params.screen_type)
   appendParam(qs, 'orientation',  params.orientation)
+  appendParam(qs, 'network',      params.network)
+  appendParam(qs, 'owner',        params.owner)
   return qs.toString() ? `?${qs}` : ''
 }
 
@@ -50,6 +54,19 @@ export async function getMapScreens(
     `/inventory/screens/map${buildQS(params)}`,
   )
   return res.data
+}
+
+// ─── Networks ─────────────────────────────────────────────────────────────────
+
+export async function getNetworks(): Promise<NetworkItem[]> {
+  const res = await sspFetchJson<NetworksResponse>('/inventory/networks')
+  return res.data ?? []
+}
+
+// ─── Locations ────────────────────────────────────────────────────────────────
+
+export async function getLocations(): Promise<LocationsResponse> {
+  return sspFetchJson<LocationsResponse>('/inventory/locations')
 }
 
 // ─── Single screen ────────────────────────────────────────────────────────────

@@ -1,43 +1,18 @@
 'use client';
-import { useState, useEffect, Suspense } from 'react';
-import { useSearchParams } from 'next/navigation';
+import { useState, useEffect, useRef, Suspense } from 'react';
+import { useSearchParams, useRouter } from 'next/navigation';
 import Link from 'next/link';
 import dynamic from 'next/dynamic';
 import { iconSVG, screenHref } from '@/lib/data';
 import type { Screen } from '@/lib/types';
-import type { VenueTypeNode } from '@/lib/tapon/types';
+import type { VenueTypeNode, NetworkItem, LocationsResponse, TapOnOwner } from '@/lib/tapon/types';
 
 const MapBrowse = dynamic(() => import('@/components/MapBrowse'), { ssr: false });
 
-const cities      = ['Hà Nội', 'TP.HCM', 'Đà Nẵng', 'Hải Phòng', 'Cần Thơ'];
-const formats     = ['LCD', 'LED', 'Billboard'];
-const orientations = ['Landscape', 'Portrait'];
-
-// City label → API code
-const CITY_CODE: Record<string, string> = {
-  'Hà Nội':    'hanoi',
-  'TP.HCM':    'hcm',
-  'Đà Nẵng':   'danang',
-  'Hải Phòng': 'haiphong',
-  'Cần Thơ':   'cantho',
-}
-// Format label → API code
-const FORMAT_CODE: Record<string, string> = {
-  LCD: 'lcd', LED: 'led', Billboard: 'billboard',
-}
-
-// Reverse maps for URL param → label init
-const CODE_CITY:   Record<string, string> = Object.fromEntries(Object.entries(CITY_CODE).map(([k, v]) => [v, k]));
+const FORMAT_CODE: Record<string, string> = { LCD: 'lcd', LED: 'led', Billboard: 'billboard' };
 const CODE_FORMAT: Record<string, string> = Object.fromEntries(Object.entries(FORMAT_CODE).map(([k, v]) => [v, k]));
-
-// Fallback venue types khi /api/venue-types chưa trả về
-const VENUE_FALLBACK: VenueTypeNode[] = [
-  { type: 'mall',    label: 'Retail',  count: 0, children: [] },
-  { type: 'outdoor', label: 'Outdoor', count: 0, children: [] },
-  { type: 'fnb',     label: 'F&B',     count: 0, children: [] },
-  { type: 'transit', label: 'Transit', count: 0, children: [] },
-  { type: 'office',  label: 'Office',  count: 0, children: [] },
-];
+const FORMATS     = ['LCD', 'LED', 'Billboard'];
+const ORIENTATIONS = ['Landscape', 'Portrait'];
 
 function flattenVenueTypes(nodes: VenueTypeNode[]): VenueTypeNode[] {
   const result: VenueTypeNode[] = [];
@@ -49,36 +24,43 @@ function flattenVenueTypes(nodes: VenueTypeNode[]): VenueTypeNode[] {
 }
 
 export default function BrowsePage() {
-  return (
-    <Suspense>
-      <BrowsePageInner />
-    </Suspense>
-  );
+  return <Suspense><BrowsePageInner /></Suspense>;
 }
 
 function BrowsePageInner() {
-  const sp = useSearchParams();
+  const sp     = useSearchParams();
+  const router = useRouter();
+  const mountedRef       = useRef(false);
+  const ownerDebounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
-  const [view, setView]               = useState<'map' | 'list'>('map');
+  // ── Filter state — khởi tạo từ URL ─────────────────────────────────────────
+  const [view, setView]         = useState<'map' | 'list'>(() => (sp.get('view') as 'map' | 'list') ?? 'map');
   const [filterPanel, setFilterPanel] = useState(true);
-  const [searchQ, setSearchQ]         = useState(() => sp.get('q') ?? '');
-  const [selCities, setSelCities]     = useState<string[]>(() => sp.getAll('city[]').map(c => CODE_CITY[c]).filter(Boolean));
-  // selVenues lưu API type codes trực tiếp (không qua label mapping)
-  const [selVenues, setSelVenues]     = useState<string[]>(() => sp.getAll('venue_type[]'));
-  const [selFormats, setSelFormats]   = useState<string[]>(() => sp.getAll('screen_type[]').map(f => CODE_FORMAT[f]).filter(Boolean));
-  const [selOri, setSelOri]           = useState<string[]>(() => sp.getAll('orientation[]'));
-  const [sortBy, setSortBy]           = useState(() => sp.get('sort') ?? '');
+  const [searchQ, setSearchQ]   = useState(() => sp.get('q') ?? '');
+  const [selRegions, setSelRegions]     = useState<string[]>(() => sp.getAll('region[]'));
+  const [selCities, setSelCities]       = useState<string[]>(() => sp.getAll('city[]'));
+  const [selDistricts, setSelDistricts] = useState<string[]>(() => sp.getAll('district[]'));
+  const [selNetworks, setSelNetworks]   = useState<string[]>(() => sp.getAll('network[]'));
+  const [selOwners, setSelOwners]       = useState<string[]>(() => sp.getAll('owner[]'));
+  const [selVenues, setSelVenues]       = useState<string[]>(() => sp.getAll('venue_type[]'));
+  const [selFormats, setSelFormats]     = useState<string[]>(() =>
+    sp.getAll('screen_type[]').map(f => CODE_FORMAT[f]).filter(Boolean)
+  );
+  const [selOri, setSelOri]     = useState<string[]>(() => sp.getAll('orientation[]'));
+  const [sortBy, setSortBy]     = useState(() => sp.get('sort') ?? '');
 
-  // Venue types dynamic từ API
-  const [venueTypeList, setVenueTypeList] = useState<VenueTypeNode[]>(VENUE_FALLBACK);
+  // ── Dữ liệu filter động từ API ──────────────────────────────────────────────
+  const [venueTypeList, setVenueTypeList] = useState<VenueTypeNode[]>([]);
+  const [networks, setNetworks]           = useState<NetworkItem[]>([]);
+  const [locData, setLocData]             = useState<LocationsResponse>({ regions: [], provinces: [], districts: [] });
 
-  useEffect(() => {
-    fetch('/api/venue-types')
-      .then(r => r.json())
-      .then(data => { if (data?.data?.length > 0) setVenueTypeList(flattenVenueTypes(data.data)); })
-      .catch(() => {});
-  }, []);
+  // Owner search combobox
+  const [ownerQ, setOwnerQ]               = useState('');
+  const [ownerResults, setOwnerResults]   = useState<TapOnOwner[]>([]);
+  const [ownerSearching, setOwnerSearching] = useState(false);
+  const [ownerNames, setOwnerNames]       = useState<Record<string, string>>({});
 
+  // ── Dữ liệu màn hình ───────────────────────────────────────────────────────
   const [screens, setScreens] = useState<Screen[]>([]);
   const [loading, setLoading] = useState(true);
   const [total, setTotal]     = useState(0);
@@ -91,10 +73,61 @@ function BrowsePageInner() {
     return arr.includes(val) ? arr.filter(x => x !== val) : [...arr, val];
   }
 
-  // Reset về page 1 khi bất kỳ filter thay đổi
-  useEffect(() => { setPage(1) }, [view, selCities, selVenues, selFormats, selOri, searchQ, sortBy]);
+  // ── Fetch metadata filter khi mount ─────────────────────────────────────────
+  useEffect(() => {
+    fetch('/api/venue-types')
+      .then(r => r.json())
+      .then(d => { if (d?.data?.length > 0) setVenueTypeList(flattenVenueTypes(d.data)); })
+      .catch(() => {});
 
-  // ── Fetch từ /api/screens ──────────────────────────────────────────────────
+    fetch('/api/networks')
+      .then(r => r.json())
+      .then(d => { if (d?.data?.length > 0) setNetworks(d.data); })
+      .catch(() => {});
+
+    fetch('/api/locations')
+      .then(r => r.json())
+      .then(d => { if (d?.regions) setLocData(d); })
+      .catch(() => {});
+  }, []);
+
+  // Nếu URL có owner[], lấy tên để hiển thị chip
+  useEffect(() => {
+    const initOwners = sp.getAll('owner[]');
+    if (initOwners.length === 0) return;
+    fetch('/api/owners?limit=50')
+      .then(r => r.json())
+      .then(d => {
+        const map: Record<string, string> = {};
+        (d?.data ?? []).forEach((o: TapOnOwner) => { map[o.owner_id] = o.name; });
+        setOwnerNames(map);
+      })
+      .catch(() => {});
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // ── URL sync — push khi filter thay đổi (bỏ qua lần mount đầu) ─────────────
+  useEffect(() => {
+    if (!mountedRef.current) { mountedRef.current = true; return; }
+    const p = new URLSearchParams();
+    if (view !== 'map')  p.set('view', view);
+    if (searchQ)         p.set('q', searchQ);
+    if (sortBy)          p.set('sort', sortBy);
+    selRegions.forEach(r   => p.append('region[]',      r));
+    selCities.forEach(c    => p.append('city[]',         c));
+    selDistricts.forEach(d => p.append('district[]',     d));
+    selNetworks.forEach(n  => p.append('network[]',      n));
+    selOwners.forEach(o    => p.append('owner[]',        o));
+    selVenues.forEach(v    => p.append('venue_type[]',   v));
+    selFormats.forEach(f   => p.append('screen_type[]',  FORMAT_CODE[f] ?? f.toLowerCase()));
+    selOri.forEach(o       => p.append('orientation[]',  o.toLowerCase()));
+    const qs = p.toString();
+    router.replace(qs ? `/browse?${qs}` : '/browse', { scroll: false });
+  }, [view, searchQ, sortBy, selRegions, selCities, selDistricts, selNetworks, selOwners, selVenues, selFormats, selOri]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // Reset page khi filter thay đổi
+  useEffect(() => { setPage(1); }, [view, selRegions, selCities, selDistricts, selNetworks, selOwners, selVenues, selFormats, selOri, searchQ, sortBy]);
+
+  // ── Fetch màn hình ──────────────────────────────────────────────────────────
   useEffect(() => {
     const controller = new AbortController();
     const params = new URLSearchParams();
@@ -106,119 +139,322 @@ function BrowsePageInner() {
       params.set('page',  String(page));
     }
 
-    // Multi-value params — gửi tất cả giá trị đã chọn lên server
-    selCities.forEach(c => params.append('city[]',        CITY_CODE[c]   ?? c));
-    selVenues.forEach(v => params.append('venue_type[]',  v));               // codes trực tiếp
-    selFormats.forEach(f => params.append('screen_type[]', FORMAT_CODE[f] ?? f.toLowerCase()));
-    selOri.forEach(o => params.append('orientation[]', o.toLowerCase()));
-
+    selRegions.forEach(r   => params.append('region[]',      r));
+    selCities.forEach(c    => params.append('city[]',         c));
+    selDistricts.forEach(d => params.append('district[]',     d));
+    selNetworks.forEach(n  => params.append('network[]',      n));
+    selOwners.forEach(o    => params.append('owner[]',        o));
+    selVenues.forEach(v    => params.append('venue_type[]',   v));
+    selFormats.forEach(f   => params.append('screen_type[]',  FORMAT_CODE[f] ?? f.toLowerCase()));
+    selOri.forEach(o       => params.append('orientation[]',  o.toLowerCase()));
     if (searchQ) params.set('q',    searchQ);
     if (sortBy)  params.set('sort', sortBy);
 
     setLoading(true);
-
     fetch(`/api/screens?${params}`, { signal: controller.signal })
       .then(r => r.json())
-      .then(data => {
-        setScreens(data.data ?? []);
-        setTotal(data.total ?? 0);
-      })
+      .then(data => { setScreens(data.data ?? []); setTotal(data.total ?? 0); })
       .catch(err => { if (err.name !== 'AbortError') setScreens([]); })
       .finally(() => setLoading(false));
 
     return () => controller.abort();
-  }, [view, selCities, selVenues, selFormats, selOri, searchQ, sortBy, page]);
+  }, [view, selRegions, selCities, selDistricts, selNetworks, selOwners, selVenues, selFormats, selOri, searchQ, sortBy, page]);
+
+  // ── Owner search có debounce ────────────────────────────────────────────────
+  useEffect(() => {
+    if (ownerDebounceRef.current) clearTimeout(ownerDebounceRef.current);
+    if (!ownerQ.trim()) { setOwnerResults([]); return; }
+    ownerDebounceRef.current = setTimeout(() => {
+      setOwnerSearching(true);
+      fetch(`/api/owners?q=${encodeURIComponent(ownerQ)}&limit=10`)
+        .then(r => r.json())
+        .then(d => setOwnerResults(d?.data ?? []))
+        .catch(() => setOwnerResults([]))
+        .finally(() => setOwnerSearching(false));
+    }, 300);
+    return () => { if (ownerDebounceRef.current) clearTimeout(ownerDebounceRef.current); };
+  }, [ownerQ]);
 
   function clearFilters() {
-    setSearchQ('');
-    setSelCities([]);
-    setSelVenues([]);
-    setSelFormats([]);
-    setSelOri([]);
-    setSortBy('');
+    setSearchQ(''); setSelRegions([]); setSelCities([]); setSelDistricts([]);
+    setSelNetworks([]); setSelOwners([]); setSelVenues([]); setSelFormats([]); setSelOri([]); setSortBy('');
   }
 
+  // Tỉnh hiển thị: nếu chọn vùng → chỉ show tỉnh thuộc vùng đó
+  const visibleProvinces = selRegions.length > 0
+    ? locData.provinces.filter(p => selRegions.includes(p.region))
+    : locData.provinces;
+
+  // Quận/huyện: chỉ show khi đã chọn tỉnh
+  const visibleDistricts = selCities.length > 0
+    ? locData.districts.filter(d => selCities.includes(d.province))
+    : [];
+
+  const activeFilterCount =
+    selRegions.length + selCities.length + selDistricts.length +
+    selNetworks.length + selOwners.length + selVenues.length +
+    selFormats.length + selOri.length + (searchQ ? 1 : 0);
+
+  // ── Render ──────────────────────────────────────────────────────────────────
   return (
     <div className={`browse-wrap${view === 'list' ? ' browse-list-mode' : ''}`}>
-      {/* Filter panel */}
+
+      {/* ── Filter panel ── */}
       {filterPanel && (
         <div className="filter-panel" id="filter-panel">
           <div className="filter-title">
             Bộ lọc
-            <div style={{display:'flex',alignItems:'center',gap:'10px'}}>
-              <div className="filter-clear" onClick={clearFilters}>Xóa</div>
+            {activeFilterCount > 0 && (
+              <span style={{marginLeft:6,background:'var(--primary)',color:'#fff',borderRadius:10,padding:'1px 7px',fontSize:11,fontWeight:700}}>
+                {activeFilterCount}
+              </span>
+            )}
+            <div style={{display:'flex',alignItems:'center',gap:'10px',marginLeft:'auto'}}>
+              {activeFilterCount > 0 && (
+                <div className="filter-clear" onClick={clearFilters}>Xóa tất cả</div>
+              )}
               <div className="filter-close" onClick={() => setFilterPanel(false)}>
-                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                  <line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/>
+                </svg>
               </div>
             </div>
           </div>
 
+          {/* 1. Tìm kiếm văn bản */}
           <div className="filter-group">
             <div className="filter-group-label">Tìm kiếm</div>
-            <input type="text" className="filter-search" placeholder="Tên màn hình, địa chỉ..." value={searchQ} onChange={e => setSearchQ(e.target.value)}/>
+            <input
+              type="text"
+              className="filter-search"
+              placeholder="Tên màn hình, địa chỉ..."
+              value={searchQ}
+              onChange={e => setSearchQ(e.target.value)}
+            />
           </div>
 
+          {/* 2. Chuỗi / Network */}
+          {networks.length > 0 && (
+            <div className="filter-group">
+              <div className="filter-group-label">Chuỗi / Network</div>
+              <div className="chips">
+                {networks.map(n => (
+                  <div
+                    key={n.code}
+                    className={`chip${selNetworks.includes(n.code) ? ' on' : ''}`}
+                    onClick={() => setSelNetworks(p => toggle(p, n.code))}
+                  >
+                    {n.name}
+                    {n.screen_count > 0 && (
+                      <span style={{marginLeft:4,opacity:0.55,fontSize:10}}>({n.screen_count})</span>
+                    )}
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {/* 3. Media Owner */}
           <div className="filter-group">
-            <div className="filter-group-label">Thành phố</div>
-            <div className="chips">
-              {cities.map(c => (
-                <div key={c} className={`chip${selCities.includes(c) ? ' on' : ''}`} onClick={() => setSelCities(p => toggle(p, c))}>{c}</div>
-              ))}
+            <div className="filter-group-label">Media Owner</div>
+            {selOwners.length > 0 && (
+              <div className="chips" style={{marginBottom:8}}>
+                {selOwners.map(slug => (
+                  <div
+                    key={slug}
+                    className="chip on"
+                    onClick={() => setSelOwners(p => p.filter(x => x !== slug))}
+                    style={{paddingRight:6}}
+                  >
+                    {ownerNames[slug] ?? slug}
+                    <span style={{marginLeft:5,opacity:0.7}}>×</span>
+                  </div>
+                ))}
+              </div>
+            )}
+            <div style={{position:'relative'}}>
+              <input
+                type="text"
+                className="filter-search"
+                placeholder="Tìm tên media owner..."
+                value={ownerQ}
+                onChange={e => setOwnerQ(e.target.value)}
+                onBlur={() => setTimeout(() => setOwnerResults([]), 200)}
+              />
+              {(ownerSearching || ownerResults.length > 0) && (
+                <div style={{
+                  position:'absolute',top:'calc(100% + 4px)',left:0,right:0,
+                  background:'#fff',border:'1px solid var(--g200)',borderRadius:8,
+                  boxShadow:'0 4px 16px rgba(0,0,0,0.1)',zIndex:50,
+                  maxHeight:200,overflowY:'auto',
+                }}>
+                  {ownerSearching && (
+                    <div style={{padding:'10px 12px',color:'var(--g400)',fontSize:13}}>Đang tìm...</div>
+                  )}
+                  {!ownerSearching && ownerResults.length === 0 && (
+                    <div style={{padding:'10px 12px',color:'var(--g400)',fontSize:13}}>Không tìm thấy</div>
+                  )}
+                  {!ownerSearching && ownerResults.map(o => (
+                    <div
+                      key={o.owner_id}
+                      style={{
+                        padding:'9px 12px',cursor:'pointer',fontSize:13,
+                        display:'flex',alignItems:'center',justifyContent:'space-between',
+                        borderBottom:'1px solid var(--g100)',
+                      }}
+                      onMouseDown={() => {
+                        if (!selOwners.includes(o.owner_id)) {
+                          setSelOwners(p => [...p, o.owner_id]);
+                          setOwnerNames(m => ({ ...m, [o.owner_id]: o.name }));
+                        }
+                        setOwnerQ('');
+                        setOwnerResults([]);
+                      }}
+                    >
+                      <span>{o.name}</span>
+                      <span style={{fontSize:11,color:'var(--g400)'}}>{o.screen_count} màn</span>
+                    </div>
+                  ))}
+                </div>
+              )}
             </div>
           </div>
 
+          {/* 4. Địa điểm */}
           <div className="filter-group">
-            <div className="filter-group-label">Loại venue</div>
+            <div className="filter-group-label">Địa điểm</div>
+
+            {/* Vùng miền */}
+            {locData.regions.length > 0 && (
+              <>
+                <div style={{fontSize:11,color:'var(--g400)',marginBottom:5,textTransform:'uppercase',letterSpacing:'0.05em'}}>Vùng miền</div>
+                <div className="chips" style={{marginBottom:10}}>
+                  {locData.regions.map(r => (
+                    <div
+                      key={r.code}
+                      className={`chip${selRegions.includes(r.code) ? ' on' : ''}`}
+                      onClick={() => setSelRegions(p => toggle(p, r.code))}
+                    >
+                      {r.name}
+                    </div>
+                  ))}
+                </div>
+              </>
+            )}
+
+            {/* Tỉnh / Thành phố */}
+            {visibleProvinces.length > 0 && (
+              <>
+                <div style={{fontSize:11,color:'var(--g400)',marginBottom:5,textTransform:'uppercase',letterSpacing:'0.05em'}}>Tỉnh / Thành phố</div>
+                <div className="chips" style={{marginBottom:10}}>
+                  {visibleProvinces.map(p => (
+                    <div
+                      key={p.code}
+                      className={`chip${selCities.includes(p.code) ? ' on' : ''}`}
+                      onClick={() => setSelCities(prev => toggle(prev, p.code))}
+                    >
+                      {p.name}
+                    </div>
+                  ))}
+                </div>
+              </>
+            )}
+
+            {/* Quận / Huyện — chỉ hiện khi chọn tỉnh */}
+            {visibleDistricts.length > 0 && (
+              <>
+                <div style={{fontSize:11,color:'var(--g400)',marginBottom:5,textTransform:'uppercase',letterSpacing:'0.05em'}}>Quận / Huyện</div>
+                <div className="chips">
+                  {visibleDistricts.map(d => (
+                    <div
+                      key={d.code}
+                      className={`chip${selDistricts.includes(d.code) ? ' on' : ''}`}
+                      onClick={() => setSelDistricts(prev => toggle(prev, d.code))}
+                    >
+                      {d.name}
+                    </div>
+                  ))}
+                </div>
+              </>
+            )}
+          </div>
+
+          {/* 5. Venue Type */}
+          {venueTypeList.length > 0 && (
+            <div className="filter-group">
+              <div className="filter-group-label">Loại Venue</div>
+              <div className="chips">
+                {venueTypeList.map(vt => (
+                  <div
+                    key={vt.type}
+                    className={`chip${selVenues.includes(vt.type) ? ' on' : ''}${vt.type.includes('.') ? ' chip-child' : ''}`}
+                    onClick={() => setSelVenues(p => toggle(p, vt.type))}
+                  >
+                    {vt.label}
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {/* 6. Định dạng */}
+          <div className="filter-group">
+            <div className="filter-group-label">Định dạng</div>
             <div className="chips">
-              {venueTypeList.map(vt => (
+              {FORMATS.map(f => (
                 <div
-                  key={vt.type}
-                  className={`chip${selVenues.includes(vt.type) ? ' on' : ''}${vt.type.includes('.') ? ' chip-child' : ''}`}
-                  onClick={() => setSelVenues(p => toggle(p, vt.type))}
+                  key={f}
+                  className={`chip${selFormats.includes(f) ? ' on' : ''}`}
+                  onClick={() => setSelFormats(p => toggle(p, f))}
                 >
-                  {vt.label}
+                  {f}
                 </div>
               ))}
             </div>
           </div>
 
-          <div className="filter-group">
-            <div className="filter-group-label">Định dạng</div>
-            <div className="chips">
-              {formats.map(f => (
-                <div key={f} className={`chip${selFormats.includes(f) ? ' on' : ''}`} onClick={() => setSelFormats(p => toggle(p, f))}>{f}</div>
-              ))}
-            </div>
-          </div>
-
+          {/* 7. Orientation */}
           <div className="filter-group">
             <div className="filter-group-label">Orientation</div>
             <div className="chips">
-              {orientations.map(o => (
-                <div key={o} className={`chip${selOri.includes(o) ? ' on' : ''}`} onClick={() => setSelOri(p => toggle(p, o))}>{o}</div>
+              {ORIENTATIONS.map(o => (
+                <div
+                  key={o}
+                  className={`chip${selOri.includes(o) ? ' on' : ''}`}
+                  onClick={() => setSelOri(p => toggle(p, o))}
+                >
+                  {o}
+                </div>
               ))}
             </div>
           </div>
 
+          {/* Login prompt */}
           <div className="filter-group" style={{borderBottom:'none'}}>
             <div style={{fontSize:'12px',color:'var(--g500)',marginBottom:'10px',display:'flex',alignItems:'center',gap:'6px'}}>
-              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><rect x="3" y="11" width="18" height="11" rx="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                <rect x="3" y="11" width="18" height="11" rx="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/>
+              </svg>
               Filter theo CPM — cần đăng nhập
             </div>
-            <Link href="/login" className="btn btn-outline" style={{width:'100%',justifyContent:'center'}}>Đăng nhập để xem giá</Link>
+            <Link href="/login" className="btn btn-outline" style={{width:'100%',justifyContent:'center'}}>
+              Đăng nhập để xem giá
+            </Link>
           </div>
         </div>
       )}
 
-      {/* Browse main */}
+      {/* ── Browse main ── */}
       <div className="browse-main">
         {/* Toolbar */}
         <div className="browse-toolbar">
           <div style={{display:'flex',alignItems:'center',gap:'10px',flexWrap:'wrap'}}>
             {!filterPanel && (
               <button className="btn btn-ghost btn-sm filter-toggle-btn" onClick={() => setFilterPanel(true)}>
-                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" width="15" height="15"><line x1="4" y1="6" x2="20" y2="6"/><line x1="8" y1="12" x2="16" y2="12"/><line x1="11" y1="18" x2="13" y2="18"/></svg>
-                Bộ lọc
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" width="15" height="15">
+                  <line x1="4" y1="6" x2="20" y2="6"/><line x1="8" y1="12" x2="16" y2="12"/><line x1="11" y1="18" x2="13" y2="18"/>
+                </svg>
+                Bộ lọc {activeFilterCount > 0 && `(${activeFilterCount})`}
               </button>
             )}
             <div className="browse-count">
@@ -237,23 +473,37 @@ function BrowsePageInner() {
             </select>
             <div className="view-toggle">
               <button className={`vt-btn${view === 'map' ? ' on' : ''}`} onClick={() => setView('map')}>
-                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><polygon points="1 6 1 22 8 18 16 22 23 18 23 2 16 6 8 2 1 6"/><line x1="8" y1="2" x2="8" y2="18"/><line x1="16" y1="6" x2="16" y2="22"/></svg>
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                  <polygon points="1 6 1 22 8 18 16 22 23 18 23 2 16 6 8 2 1 6"/>
+                  <line x1="8" y1="2" x2="8" y2="18"/><line x1="16" y1="6" x2="16" y2="22"/>
+                </svg>
                 Map
               </button>
               <button className={`vt-btn${view === 'list' ? ' on' : ''}`} onClick={() => setView('list')}>
-                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><line x1="8" y1="6" x2="21" y2="6"/><line x1="8" y1="12" x2="21" y2="12"/><line x1="8" y1="18" x2="21" y2="18"/><line x1="3" y1="6" x2="3.01" y2="6"/><line x1="3" y1="12" x2="3.01" y2="12"/><line x1="3" y1="18" x2="3.01" y2="18"/></svg>
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                  <line x1="8" y1="6" x2="21" y2="6"/><line x1="8" y1="12" x2="21" y2="12"/>
+                  <line x1="8" y1="18" x2="21" y2="18"/><line x1="3" y1="6" x2="3.01" y2="6"/>
+                  <line x1="3" y1="12" x2="3.01" y2="12"/><line x1="3" y1="18" x2="3.01" y2="18"/>
+                </svg>
                 List
               </button>
             </div>
           </div>
         </div>
 
-        {/* Map view — luôn mounted để không reinit map, chỉ ẩn khi chuyển sang list */}
-        <div id="map-view-wrap" style={{flex:1,display:view === 'map' ? 'flex' : 'none',flexDirection:'column',position:'relative'}}>
+        {/* Map view — luôn mounted, chỉ ẩn khi chuyển sang list */}
+        <div
+          id="map-view-wrap"
+          style={{flex:1,display:view === 'map' ? 'flex' : 'none',flexDirection:'column',position:'relative'}}
+        >
           <MapBrowse screens={screens} />
-          {/* Loading overlay — hiện spinner mờ trên map thay vì unmount */}
           {loading && (
-            <div style={{position:'absolute',inset:0,background:'rgba(255,255,255,0.55)',display:'flex',alignItems:'center',justifyContent:'center',gap:'8px',color:'var(--g700)',fontWeight:600,fontSize:13,zIndex:10,pointerEvents:'none'}}>
+            <div style={{
+              position:'absolute',inset:0,background:'rgba(255,255,255,0.55)',
+              display:'flex',alignItems:'center',justifyContent:'center',
+              gap:'8px',color:'var(--g700)',fontWeight:600,fontSize:13,
+              zIndex:10,pointerEvents:'none',
+            }}>
               <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" style={{animation:'spin 1s linear infinite'}}>
                 <path d="M21 12a9 9 0 1 1-6.219-8.56"/>
               </svg>
@@ -268,26 +518,36 @@ function BrowsePageInner() {
             <div className="list-grid" id="list-grid">
               {loading ? (
                 <div style={{padding:'60px',textAlign:'center',color:'var(--g400)',gridColumn:'1/-1',display:'flex',alignItems:'center',justifyContent:'center',gap:'10px'}}>
-                  <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" style={{animation:'spin 1s linear infinite'}}><path d="M21 12a9 9 0 1 1-6.219-8.56"/></svg>
+                  <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" style={{animation:'spin 1s linear infinite'}}>
+                    <path d="M21 12a9 9 0 1 1-6.219-8.56"/>
+                  </svg>
                   Đang tải màn hình...
                 </div>
               ) : screens.length === 0 ? (
-                <div style={{padding:'60px',textAlign:'center',color:'var(--g500)',gridColumn:'1/-1'}}>Không tìm thấy màn hình nào.</div>
+                <div style={{padding:'60px',textAlign:'center',color:'var(--g500)',gridColumn:'1/-1'}}>
+                  Không tìm thấy màn hình nào.
+                </div>
               ) : (
                 screens.map(s => (
                   <Link key={s.id} href={screenHref(s.id)} className="sc">
                     <div className={`sc-thumb sc-thumb-${s.thumb}`}>
-                      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" width="56" height="56" dangerouslySetInnerHTML={{__html: iconSVG[s.venue] || ''}}/>
+                      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" width="56" height="56"
+                        dangerouslySetInnerHTML={{__html: iconSVG[s.venue] || ''}}/>
                       <div className="sc-status"><span className="badge badge-green">● Online</span></div>
                       <div className="sc-format"><span className="badge badge-navy">{s.type}</span></div>
                     </div>
                     <div className="sc-body">
                       <div className="sc-name">{s.name}</div>
                       <div className="sc-loc">
-                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" width="12" height="12"><path d="M21 10c0 7-9 13-9 13S3 17 3 10a9 9 0 0 1 18 0z"/><circle cx="12" cy="10" r="3"/></svg>
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" width="12" height="12">
+                          <path d="M21 10c0 7-9 13-9 13S3 17 3 10a9 9 0 0 1 18 0z"/><circle cx="12" cy="10" r="3"/>
+                        </svg>
                         {s.loc}
                       </div>
-                      <div className="sc-tags"><span className="sc-pill">{s.size}</span><span className="sc-pill">{s.venue}</span></div>
+                      <div className="sc-tags">
+                        <span className="sc-pill">{s.size}</span>
+                        <span className="sc-pill">{s.venue}</span>
+                      </div>
                       <div className="sc-footer">
                         <div className="sc-impr">
                           {s.weekly > 0
@@ -296,7 +556,9 @@ function BrowsePageInner() {
                           }
                         </div>
                         <div className="sc-lock">
-                          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" width="12" height="12"><rect x="3" y="11" width="18" height="11" rx="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>
+                          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" width="12" height="12">
+                            <rect x="3" y="11" width="18" height="11" rx="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/>
+                          </svg>
                           Đăng nhập
                         </div>
                       </div>
@@ -316,13 +578,12 @@ function BrowsePageInner() {
                 >
                   ← Trước
                 </button>
-
                 {Array.from({length: Math.min(totalPages, 7)}, (_, i) => {
                   let p: number;
-                  if (totalPages <= 7) p = i + 1;
-                  else if (page <= 4) p = i + 1;
+                  if (totalPages <= 7)          p = i + 1;
+                  else if (page <= 4)           p = i + 1;
                   else if (page >= totalPages - 3) p = totalPages - 6 + i;
-                  else p = page - 3 + i;
+                  else                          p = page - 3 + i;
                   return (
                     <button
                       key={p}
@@ -334,7 +595,6 @@ function BrowsePageInner() {
                     </button>
                   );
                 })}
-
                 <button
                   className="btn btn-ghost btn-sm"
                   disabled={page === totalPages}
@@ -342,7 +602,6 @@ function BrowsePageInner() {
                 >
                   Sau →
                 </button>
-
                 <span style={{fontSize:'12px',color:'var(--g500)',marginLeft:'8px'}}>
                   {page}/{totalPages} · {total} màn hình
                 </span>
