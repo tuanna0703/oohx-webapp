@@ -12,6 +12,14 @@ const hsLabels: Record<string, Record<string, string>> = {
   loc: { all: 'Toàn quốc' },
 };
 
+const FALLBACK_VENUE_TYPES: VenueTypeNode[] = [
+  { type: 'mall',    label: 'Retail / Mall',   count: 0, children: [] },
+  { type: 'outdoor', label: 'Outdoor',          count: 0, children: [] },
+  { type: 'fnb',     label: 'F&B / Coffee',     count: 0, children: [] },
+  { type: 'transit', label: 'Transit',          count: 0, children: [] },
+  { type: 'office',  label: 'Office',           count: 0, children: [] },
+];
+
 /** Flatten cây venue types thành danh sách phẳng để hiển thị chips.
  *  Root nodes được giữ nguyên; nếu root có children thì thêm children vào sau (indent). */
 function flattenVenueTypes(nodes: VenueTypeNode[]): VenueTypeNode[] {
@@ -35,7 +43,7 @@ export default function HomePage() {
 
   // ── API data ──────────────────────────────────────────────────────────────
   const [stats, setStats]                   = useState<InventoryStats | null>(null);
-  const [venueTypes, setVenueTypes]         = useState<VenueTypeNode[]>([]);
+  const [venueTypes, setVenueTypes]         = useState<VenueTypeNode[]>(FALLBACK_VENUE_TYPES);
   const [featuredOwners, setFeaturedOwners] = useState<TapOnOwner[]>([]);
   const [featuredScreens, setFeaturedScreens] = useState<Screen[]>([]);
 
@@ -260,26 +268,19 @@ export default function HomePage() {
                           Tất cả
                         </div>
 
-                        {/* Dynamic từ /api/venue-types */}
-                        {venueTypes.length > 0 ? (
-                          venueTypes.map(vt => (
-                            <div
-                              key={vt.type}
-                              className={`hs-chip${hsState.venue === vt.type ? ' on' : ''}${vt.type.includes('.') ? ' hs-chip-child' : ''}`}
-                              onClick={e => { e.stopPropagation(); selectHs('venue', vt.type, vt.label); }}
-                              title={`${vt.count.toLocaleString('vi-VN')} màn hình`}
-                            >
-                              {vt.type.includes('.') && <span className="hs-chip-indent">↳ </span>}
-                              {vt.label}
-                              <span className="hs-chip-count">{vt.count.toLocaleString('vi-VN')}</span>
-                            </div>
-                          ))
-                        ) : (
-                          /* Skeleton khi đang load */
-                          [1,2,3,4].map(i => (
-                            <div key={i} className="hs-chip hs-chip-skeleton" style={{width: `${60 + i * 15}px`}} />
-                          ))
-                        )}
+                        {/* Dynamic từ /api/venue-types (fallback hardcode khi API chưa sẵn sàng) */}
+                        {venueTypes.map(vt => (
+                          <div
+                            key={vt.type}
+                            className={`hs-chip${hsState.venue === vt.type ? ' on' : ''}${vt.type.includes('.') ? ' hs-chip-child' : ''}`}
+                            onClick={e => { e.stopPropagation(); selectHs('venue', vt.type, vt.label); }}
+                            title={vt.count > 0 ? `${vt.count.toLocaleString('vi-VN')} màn hình` : undefined}
+                          >
+                            {vt.type.includes('.') && <span className="hs-chip-indent">↳ </span>}
+                            {vt.label}
+                            {vt.count > 0 && <span className="hs-chip-count">{vt.count.toLocaleString('vi-VN')}</span>}
+                          </div>
+                        ))}
                       </div>
                     </div>
                   </div>
