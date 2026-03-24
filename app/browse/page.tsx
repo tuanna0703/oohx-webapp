@@ -1,5 +1,5 @@
 'use client';
-import { useState, useEffect } from 'react';
+import { useState, useEffect, Suspense } from 'react';
 import { useSearchParams } from 'next/navigation';
 import Link from 'next/link';
 import dynamic from 'next/dynamic';
@@ -38,6 +38,14 @@ const CODE_VENUE:  Record<string, string> = Object.fromEntries(Object.entries(VE
 const CODE_FORMAT: Record<string, string> = Object.fromEntries(Object.entries(FORMAT_CODE).map(([k, v]) => [v, k]));
 
 export default function BrowsePage() {
+  return (
+    <Suspense>
+      <BrowsePageInner />
+    </Suspense>
+  );
+}
+
+function BrowsePageInner() {
   const sp = useSearchParams();
 
   const [view, setView]               = useState<'map' | 'list'>('map');
