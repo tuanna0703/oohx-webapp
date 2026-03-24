@@ -248,28 +248,30 @@ function BrowsePageInner() {
           </div>
         </div>
 
-        {/* Loading */}
-        {loading && (
-          <div style={{display:'flex',alignItems:'center',justifyContent:'center',flex:1,padding:'60px',color:'var(--g400)',gap:'10px'}}>
-            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" style={{animation:'spin 1s linear infinite'}}>
-              <path d="M21 12a9 9 0 1 1-6.219-8.56"/>
-            </svg>
-            Đang tải màn hình...
-          </div>
-        )}
-
-        {/* Map view */}
-        {!loading && view === 'map' && (
-          <div id="map-view-wrap" style={{flex:1,display:'flex',flexDirection:'column'}}>
-            <MapBrowse screens={screens} />
-          </div>
-        )}
+        {/* Map view — luôn mounted để không reinit map, chỉ ẩn khi chuyển sang list */}
+        <div id="map-view-wrap" style={{flex:1,display:view === 'map' ? 'flex' : 'none',flexDirection:'column',position:'relative'}}>
+          <MapBrowse screens={screens} />
+          {/* Loading overlay — hiện spinner mờ trên map thay vì unmount */}
+          {loading && (
+            <div style={{position:'absolute',inset:0,background:'rgba(255,255,255,0.55)',display:'flex',alignItems:'center',justifyContent:'center',gap:'8px',color:'var(--g700)',fontWeight:600,fontSize:13,zIndex:10,pointerEvents:'none'}}>
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" style={{animation:'spin 1s linear infinite'}}>
+                <path d="M21 12a9 9 0 1 1-6.219-8.56"/>
+              </svg>
+              Đang cập nhật...
+            </div>
+          )}
+        </div>
 
         {/* List view */}
-        {!loading && view === 'list' && (
+        {view === 'list' && (
           <div id="list-view-wrap" className="list-view-wrap">
             <div className="list-grid" id="list-grid">
-              {screens.length === 0 ? (
+              {loading ? (
+                <div style={{padding:'60px',textAlign:'center',color:'var(--g400)',gridColumn:'1/-1',display:'flex',alignItems:'center',justifyContent:'center',gap:'10px'}}>
+                  <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" style={{animation:'spin 1s linear infinite'}}><path d="M21 12a9 9 0 1 1-6.219-8.56"/></svg>
+                  Đang tải màn hình...
+                </div>
+              ) : screens.length === 0 ? (
                 <div style={{padding:'60px',textAlign:'center',color:'var(--g500)',gridColumn:'1/-1'}}>Không tìm thấy màn hình nào.</div>
               ) : (
                 screens.map(s => (
