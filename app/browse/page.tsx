@@ -3,6 +3,7 @@ import { useState, useEffect } from 'react';
 import Link from 'next/link';
 import dynamic from 'next/dynamic';
 import { iconSVG, screenHref } from '@/lib/data';
+import type { Screen } from '@/lib/types';
 
 const MapBrowse = dynamic(() => import('@/components/MapBrowse'), { ssr: false });
 
