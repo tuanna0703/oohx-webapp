@@ -3,15 +3,27 @@ import { useState, useRef, useEffect } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { screenHref, iconSVG } from '@/lib/data';
-import type { InventoryStats, TapOnOwner } from '@/lib/tapon/types';
+import type { InventoryStats, TapOnOwner, VenueTypeNode } from '@/lib/tapon/types';
 import type { Screen } from '@/lib/types';
 
 const hsInit = { type: 'all', venue: 'all', loc: 'all' };
 const hsLabels: Record<string, Record<string, string>> = {
   type: { all: 'Tất cả định dạng', lcd: 'LCD Screen', led: 'LED Screen', billboard: 'Billboard' },
-  venue: { all: 'Tất cả địa điểm', mall: 'Siêu thị / Mall', outdoor: 'Outdoor / Billboard', fnb: 'F&B / Coffee', transit: 'Sân bay / Nhà ga', office: 'Văn phòng' },
   loc: { all: 'Toàn quốc' },
 };
+
+/** Flatten cây venue types thành danh sách phẳng để hiển thị chips.
+ *  Root nodes được giữ nguyên; nếu root có children thì thêm children vào sau (indent). */
+function flattenVenueTypes(nodes: VenueTypeNode[]): VenueTypeNode[] {
+  const result: VenueTypeNode[] = []
+  for (const node of nodes) {
+    result.push(node)
+    for (const child of node.children) {
+      result.push(child)
+    }
+  }
+  return result
+}
 
 export default function HomePage() {
   const router = useRouter();
@@ -22,7 +34,8 @@ export default function HomePage() {
   const searchRef = useRef<HTMLDivElement>(null);
 
   // ── API data ──────────────────────────────────────────────────────────────
-  const [stats, setStats]                 = useState<InventoryStats | null>(null);
+  const [stats, setStats]                   = useState<InventoryStats | null>(null);
+  const [venueTypes, setVenueTypes]         = useState<VenueTypeNode[]>([]);
   const [featuredOwners, setFeaturedOwners] = useState<TapOnOwner[]>([]);
   const [featuredScreens, setFeaturedScreens] = useState<Screen[]>([]);
 
@@ -36,16 +49,18 @@ export default function HomePage() {
     return () => document.removeEventListener('click', handler);
   }, []);
 
-  // Fetch stats + featured owners + featured screens song song
+  // Fetch stats + venue types + featured owners + featured screens song song
   useEffect(() => {
     Promise.all([
       fetch('/api/stats').then(r => r.json()).catch(() => null),
+      fetch('/api/venue-types').then(r => r.json()).catch(() => null),
       fetch('/api/owners?featured=true&limit=6').then(r => r.json()).catch(() => null),
       fetch('/api/screens?limit=3&sort=newest').then(r => r.json()).catch(() => null),
-    ]).then(([statsData, ownersData, screensData]) => {
-      if (statsData && !statsData.error)   setStats(statsData);
-      if (ownersData?.data)                setFeaturedOwners(ownersData.data);
-      if (screensData?.data)               setFeaturedScreens(screensData.data);
+    ]).then(([statsData, venueTypesData, ownersData, screensData]) => {
+      if (statsData && !statsData.error)     setStats(statsData);
+      if (venueTypesData?.data)              setVenueTypes(flattenVenueTypes(venueTypesData.data));
+      if (ownersData?.data)                  setFeaturedOwners(ownersData.data);
+      if (screensData?.data)                 setFeaturedScreens(screensData.data);
     });
   }, []);
 
@@ -78,6 +93,11 @@ export default function HomePage() {
   function venueCount(label: string): number {
     return stats?.venues.find(v => v.label === label)?.count ?? 0;
   }
+
+  // Label hiển thị cho venue đang chọn (kể cả "Tất cả")
+  const selectedVenueLabel = hsState.venue === 'all'
+    ? 'Tất cả địa điểm'
+    : (venueTypes.find(v => v.type === hsState.venue)?.label ?? hsState.venue);
 
   return (
     <>
@@ -225,16 +245,41 @@ export default function HomePage() {
                       </div>
                       <div className="hs-field-body">
                         <div className="hs-field-label">Venue type</div>
-                        <div className="hs-field-value">{hsValues.venue}</div>
+                        <div className="hs-field-value">{selectedVenueLabel}</div>
                       </div>
                       <svg className="hs-chevron" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" width="14" height="14"><polyline points="6 9 12 15 18 9"/></svg>
                     </div>
                     <div className="hs-dropdown">
                       <div className="hs-dd-title">Loại địa điểm</div>
                       <div className="hs-dd-chips">
-                        {[['all','Tất cả'],['mall','Siêu thị / Mall'],['outdoor','Outdoor / Billboard'],['fnb','F&B / Coffee'],['transit','Sân bay / Nhà ga'],['office','Văn phòng']].map(([v,l]) => (
-                          <div key={v} className={`hs-chip${hsState.venue === v ? ' on' : ''}`} onClick={e => { e.stopPropagation(); selectHs('venue', v, l); }}>{l}</div>
-                        ))}
+                        {/* "Tất cả" luôn đầu tiên */}
+                        <div
+                          className={`hs-chip${hsState.venue === 'all' ? ' on' : ''}`}
+                          onClick={e => { e.stopPropagation(); selectHs('venue', 'all', 'Tất cả địa điểm'); }}
+                        >
+                          Tất cả
+                        </div>
+
+                        {/* Dynamic từ /api/venue-types */}
+                        {venueTypes.length > 0 ? (
+                          venueTypes.map(vt => (
+                            <div
+                              key={vt.type}
+                              className={`hs-chip${hsState.venue === vt.type ? ' on' : ''}${vt.type.includes('.') ? ' hs-chip-child' : ''}`}
+                              onClick={e => { e.stopPropagation(); selectHs('venue', vt.type, vt.label); }}
+                              title={`${vt.count.toLocaleString('vi-VN')} màn hình`}
+                            >
+                              {vt.type.includes('.') && <span className="hs-chip-indent">↳ </span>}
+                              {vt.label}
+                              <span className="hs-chip-count">{vt.count.toLocaleString('vi-VN')}</span>
+                            </div>
+                          ))
+                        ) : (
+                          /* Skeleton khi đang load */
+                          [1,2,3,4].map(i => (
+                            <div key={i} className="hs-chip hs-chip-skeleton" style={{width: `${60 + i * 15}px`}} />
+                          ))
+                        )}
                       </div>
                     </div>
                   </div>

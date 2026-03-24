@@ -99,6 +99,19 @@ export interface ScreenListParams {
   updated_after?: string // ISO8601
 }
 
+// ─── Venue Types ──────────────────────────────────────────────────────────────
+
+export interface VenueTypeNode {
+  type:     string          // string_value từ taxonomy, vd: "outdoor", "retail.malls"
+  label:    string          // display name từ venue_types.venue_type
+  count:    number          // số màn hình active (đã roll-up từ con)
+  children: VenueTypeNode[] // cây con, rỗng nếu là leaf
+}
+
+export interface VenueTypesResponse {
+  data: VenueTypeNode[]
+}
+
 // ─── Stats ────────────────────────────────────────────────────────────────────
 
 export interface InventoryStats {
