@@ -1,6 +1,7 @@
 'use client';
-import { useEffect, useRef } from 'react';
-import { Map, Popup, type GeoJSONSource } from 'maplibre-gl'; // CSS loaded in layout.tsx
+import { useEffect, useRef, useState } from 'react';
+import { createPortal } from 'react-dom';
+import { Map, type GeoJSONSource } from 'maplibre-gl'; // CSS loaded in layout.tsx
 import type { Screen } from '@/lib/types';
 import { screenHref, MAPLIBRE_STYLE, VENUE_COLORS } from '@/lib/data';
 
@@ -8,15 +9,38 @@ interface Props {
   screens: Screen[];
 }
 
+interface PopupState {
+  lngLat: [number, number];
+  html: string;
+}
+
 export default function MapBrowse({ screens }: Props) {
   const containerRef = useRef<HTMLDivElement>(null);
   const mapRef       = useRef<Map | null>(null);
-  const popupRef     = useRef<Popup | null>(null);
   const loadedRef    = useRef(false);
-  // Ref để event handlers luôn đọc được screens mới nhất (tránh stale closure)
   const screensRef   = useRef<Screen[]>([]);
 
+  const [popup,    setPopup]    = useState<PopupState | null>(null);
+  const [popupPos, setPopupPos] = useState<{ x: number; y: number } | null>(null);
+
   useEffect(() => { screensRef.current = screens; }, [screens]);
+
+  // Re-project popup position whenever map moves or popup changes
+  useEffect(() => {
+    const map = mapRef.current;
+    if (!map || !popup) { setPopupPos(null); return; }
+
+    const update = () => {
+      if (!containerRef.current) return;
+      const rect = containerRef.current.getBoundingClientRect();
+      const pt   = map.project(popup.lngLat);
+      setPopupPos({ x: rect.left + pt.x, y: rect.top + pt.y });
+    };
+
+    update();
+    map.on('move', update);
+    return () => { map.off('move', update); };
+  }, [popup]);
 
   // ── Popup HTML helpers ──────────────────────────────────────────────────────
 
@@ -37,8 +61,8 @@ export default function MapBrowse({ screens }: Props) {
   }
 
   function listPopupHTML(items: Array<Record<string, string>>): string {
-    const loc   = items[0]?.loc ?? '';
-    const rows  = items.map(p => `
+    const loc  = items[0]?.loc ?? '';
+    const rows = items.map(p => `
       <a href="${screenHref(p.id)}"
          style="display:flex;align-items:center;justify-content:space-between;padding:7px 8px;background:#F7F8FC;border-radius:6px;text-decoration:none;gap:8px;flex-shrink:0">
         <div style="min-width:0">
@@ -56,7 +80,7 @@ export default function MapBrowse({ screens }: Props) {
       <div style="font-family:'Open Sans',sans-serif;padding:4px">
         <div style="font-weight:700;font-size:13px;color:#0D0F2B;margin-bottom:2px">📍 ${loc}</div>
         <div style="font-size:11px;color:#737899;margin-bottom:8px">${items.length} màn hình tại đây</div>
-        <div style="max-height:180px;overflow-y:auto;display:flex;flex-direction:column;gap:3px">
+        <div style="display:flex;flex-direction:column;gap:3px;max-height:240px;overflow-y:auto">
           ${rows}
         </div>
       </div>`;
@@ -75,8 +99,6 @@ export default function MapBrowse({ screens }: Props) {
       maxZoom:   18,
       attributionControl: false,
     });
-
-    const popup = new Popup({ closeButton: true, closeOnClick: false, maxWidth: '300px' });
 
     map.on('load', () => {
       map.addSource('screens', {
@@ -129,13 +151,9 @@ export default function MapBrowse({ screens }: Props) {
 
         src.getClusterExpansionZoom(clusterId).then(expansionZoom => {
           if (expansionZoom > map.getMaxZoom()) {
-            // Không thể zoom thêm (tất cả cùng tọa độ) → lấy leaves và hiển thị danh sách
             src.getClusterLeaves(clusterId, 200, 0).then(leaves => {
               const items = leaves.map(l => l.properties as Record<string, string>);
-              popup
-                .setLngLat(geom.coordinates as [number, number])
-                .setHTML(listPopupHTML(items))
-                .addTo(map);
+              setPopup({ lngLat: geom.coordinates as [number, number], html: listPopupHTML(items) });
             }).catch(() => {});
           } else {
             map.easeTo({ center: geom.coordinates as [number, number], zoom: expansionZoom });
@@ -144,35 +162,32 @@ export default function MapBrowse({ screens }: Props) {
       });
 
       // ── Click unclustered marker ────────────────────────────────────────────
-      // Dùng screensRef để tìm TẤT CẢ màn hình cùng tọa độ (không chỉ feature trên cùng)
       map.on('click', 'unclustered-point', e => {
         const feat = e.features?.[0];
         if (!feat) return;
         const geom       = feat.geometry as GeoJSON.Point;
         const [lng, lat] = geom.coordinates;
 
-        // Tìm tất cả screens cùng tọa độ (epsilon 0.00001° ≈ 1m)
         const atLocation = screensRef.current.filter(s =>
           Math.abs(s.lat - lat) < 0.00001 && Math.abs(s.lng - lng) < 0.00001
         );
 
+        const lngLat: [number, number] = [lng, lat];
         if (atLocation.length <= 1) {
-          // Chỉ 1 màn hình → popup đơn giản
-          popup
-            .setLngLat([lng, lat])
-            .setHTML(singlePopupHTML(feat.properties as Record<string, string>))
-            .addTo(map);
+          setPopup({ lngLat, html: singlePopupHTML(feat.properties as Record<string, string>) });
         } else {
-          // Nhiều màn hình cùng địa điểm → popup danh sách
           const items = atLocation.map(s => ({
             id: s.id, name: s.name, loc: s.loc,
             venue: s.venue, type: s.type, size: s.size,
           }));
-          popup
-            .setLngLat([lng, lat])
-            .setHTML(listPopupHTML(items))
-            .addTo(map);
+          setPopup({ lngLat, html: listPopupHTML(items) });
         }
+      });
+
+      // Close popup when clicking empty map area
+      map.on('click', e => {
+        const features = map.queryRenderedFeatures(e.point, { layers: ['clusters', 'unclustered-point'] });
+        if (features.length === 0) setPopup(null);
       });
 
       for (const layer of ['clusters', 'unclustered-point']) {
@@ -182,16 +197,13 @@ export default function MapBrowse({ screens }: Props) {
 
       map.fitBounds([[102.1, 8.4], [109.5, 23.4]], { padding: 20, duration: 0 });
 
-      mapRef.current   = map;
-      popupRef.current = popup;
+      mapRef.current    = map;
       loadedRef.current = true;
 
-      // Apply screens data nếu đã có trước khi 'load' fire
       (map.getSource('screens') as GeoJSONSource).setData(buildGeoJSON(screensRef.current));
     });
 
     return () => {
-      popupRef.current?.remove();
       mapRef.current?.remove();
       mapRef.current    = null;
       loadedRef.current = false;
@@ -205,7 +217,58 @@ export default function MapBrowse({ screens }: Props) {
     (mapRef.current.getSource('screens') as GeoJSONSource).setData(buildGeoJSON(screens));
   }, [screens]);
 
-  return <div ref={containerRef} id="leaflet-map" style={{ width: '100%', height: '100%' }} />;
+  return (
+    <>
+      <div ref={containerRef} id="leaflet-map" style={{ width: '100%', height: '100%' }} />
+
+      {/* Portal popup — renders on document.body, overlays everything including footer */}
+      {popup && popupPos && typeof document !== 'undefined' && createPortal(
+        <div
+          style={{
+            position:     'fixed',
+            left:         popupPos.x,
+            top:          popupPos.y,
+            transform:    'translate(-50%, calc(-100% - 14px))',
+            zIndex:       9999,
+            background:   '#fff',
+            borderRadius: '12px',
+            boxShadow:    '0 4px 24px rgba(13,15,43,0.18)',
+            width:        '300px',
+            pointerEvents:'auto',
+            padding:      '12px',
+          }}
+        >
+          {/* Close button */}
+          <button
+            onClick={() => setPopup(null)}
+            style={{
+              position:'absolute', top:8, right:8,
+              width:22, height:22,
+              background:'rgba(0,0,0,0.08)', border:'none',
+              borderRadius:'50%', cursor:'pointer',
+              fontSize:16, lineHeight:'22px', textAlign:'center', color:'#3D4063',
+            }}
+          >×</button>
+
+          {/* Caret */}
+          <div style={{
+            position:'absolute', bottom:-7, left:'50%', transform:'translateX(-50%)',
+            width:14, height:7, overflow:'hidden',
+          }}>
+            <div style={{
+              width:14, height:14, background:'#fff',
+              boxShadow:'0 4px 24px rgba(13,15,43,0.18)',
+              transform:'rotate(45deg)', transformOrigin:'top left',
+              marginLeft:0,
+            }}/>
+          </div>
+
+          <div dangerouslySetInnerHTML={{ __html: popup.html }} />
+        </div>,
+        document.body,
+      )}
+    </>
+  );
 }
 
 function buildGeoJSON(screens: Screen[]): GeoJSON.FeatureCollection {
