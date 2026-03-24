@@ -1,5 +1,15 @@
 import type { Screen, Owner } from './types'
 
+export const MAPLIBRE_STYLE = 'https://tiles.openfreemap.org/styles/liberty'
+
+export const VENUE_COLORS: Record<string, string> = {
+  Retail:  '#3B47F0',
+  Outdoor: '#00C48C',
+  'F&B':   '#FF6B35',
+  Transit: '#F59E0B',
+  Office:  '#8B5CF6',
+}
+
 // screen_id có thể chứa ':' (MAC address) — thay bằng '~' trong URL (safe, không cần encode)
 export function screenHref(id: string): string {
   return `/screens/${id.replace(/:/g, '~')}`

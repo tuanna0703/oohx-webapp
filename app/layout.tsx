@@ -1,5 +1,6 @@
 import type { Metadata } from 'next'
 import './globals.css'
+import 'maplibre-gl/dist/maplibre-gl.css'
 import Navbar from '@/components/Navbar'
 import Footer from '@/components/Footer'
 import Toast from '@/components/Toast'
