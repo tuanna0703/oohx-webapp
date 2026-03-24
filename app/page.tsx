@@ -2,8 +2,9 @@
 import { useState, useRef, useEffect } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
-import { screens, owners, locations } from '@/lib/data';
-import { formatPrice } from '@/lib/data';
+import { screenHref, iconSVG } from '@/lib/data';
+import type { InventoryStats, TapOnOwner } from '@/lib/tapon/types';
+import type { Screen } from '@/lib/types';
 
 const hsInit = { type: 'all', venue: 'all', loc: 'all' };
 const hsLabels: Record<string, Record<string, string>> = {
@@ -20,6 +21,11 @@ export default function HomePage() {
   const [locSearch, setLocSearch] = useState('');
   const searchRef = useRef<HTMLDivElement>(null);
 
+  // ── API data ──────────────────────────────────────────────────────────────
+  const [stats, setStats]                 = useState<InventoryStats | null>(null);
+  const [featuredOwners, setFeaturedOwners] = useState<TapOnOwner[]>([]);
+  const [featuredScreens, setFeaturedScreens] = useState<Screen[]>([]);
+
   useEffect(() => {
     function handler(e: MouseEvent) {
       if (searchRef.current && !searchRef.current.contains(e.target as Node)) {
@@ -28,6 +34,19 @@ export default function HomePage() {
     }
     document.addEventListener('click', handler);
     return () => document.removeEventListener('click', handler);
+  }, []);
+
+  // Fetch stats + featured owners + featured screens song song
+  useEffect(() => {
+    Promise.all([
+      fetch('/api/stats').then(r => r.json()).catch(() => null),
+      fetch('/api/owners?featured=true&limit=6').then(r => r.json()).catch(() => null),
+      fetch('/api/screens?limit=3&sort=newest').then(r => r.json()).catch(() => null),
+    ]).then(([statsData, ownersData, screensData]) => {
+      if (statsData && !statsData.error)   setStats(statsData);
+      if (ownersData?.data)                setFeaturedOwners(ownersData.data);
+      if (screensData?.data)               setFeaturedScreens(screensData.data);
+    });
   }, []);
 
   function toggleField(key: string, e: React.MouseEvent) {
@@ -46,10 +65,14 @@ export default function HomePage() {
     router.push('/browse');
   }
 
-  const filteredLocs = locations.filter(l => l.name.toLowerCase().includes(locSearch.toLowerCase()));
+  const filteredLocs = (stats?.cities ?? []).filter(c =>
+    c.name.toLowerCase().includes(locSearch.toLowerCase())
+  );
 
-  const featuredScreens = screens.slice(0, 3);
-  const featuredOwners = Object.values(owners);
+  // Lookup count theo venue label từ stats API (fallback 0)
+  function venueCount(label: string): number {
+    return stats?.venues.find(v => v.label === label)?.count ?? 0;
+  }
 
   return (
     <>
@@ -236,10 +259,12 @@ export default function HomePage() {
                         onClick={e => e.stopPropagation()}
                       />
                       <div className="hs-loc-list">
-                        <div className={`hs-loc-item${hsState.loc === 'all' ? ' on' : ''}`} onClick={e => { e.stopPropagation(); selectHs('loc', 'all', 'Toàn quốc'); }}>Toàn quốc <span className="hs-loc-count">1,200+</span></div>
-                        {filteredLocs.map(l => (
-                          <div key={l.name} className={`hs-loc-item${hsState.loc === l.name ? ' on' : ''}`} onClick={e => { e.stopPropagation(); selectHs('loc', l.name, l.name); }}>
-                            {l.name} <span className="hs-loc-count">{l.count}</span>
+                        <div className={`hs-loc-item${hsState.loc === 'all' ? ' on' : ''}`} onClick={e => { e.stopPropagation(); selectHs('loc', 'all', 'Toàn quốc'); }}>
+                          Toàn quốc <span className="hs-loc-count">{stats ? stats.total_screens.toLocaleString('vi-VN') : ''}</span>
+                        </div>
+                        {filteredLocs.map(c => (
+                          <div key={c.code} className={`hs-loc-item${hsState.loc === c.code ? ' on' : ''}`} onClick={e => { e.stopPropagation(); selectHs('loc', c.code, c.name); }}>
+                            {c.name} <span className="hs-loc-count">{c.count.toLocaleString('vi-VN')}</span>
                           </div>
                         ))}
                       </div>
@@ -274,21 +299,21 @@ export default function HomePage() {
               <div className="strip-item">
                 <div className="strip-top">
                   <div className="strip-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><rect x="3" y="3" width="18" height="13" rx="2"/><path d="M8 21h8m-4-5v5"/></svg></div>
-                  <div className="strip-num">12,000+</div>
+                  <div className="strip-num">{stats ? stats.total_screens.toLocaleString('vi-VN') : '—'}</div>
                 </div>
                 <div className="strip-label">Màn hình</div>
               </div>
               <div className="strip-item">
                 <div className="strip-top">
                   <div className="strip-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M21 10c0 7-9 13-9 13S3 17 3 10a9 9 0 0 1 18 0z"/><circle cx="12" cy="10" r="3"/></svg></div>
-                  <div className="strip-num">34</div>
+                  <div className="strip-num">{stats ? stats.total_cities : '—'}</div>
                 </div>
                 <div className="strip-label">Tỉnh thành</div>
               </div>
               <div className="strip-item">
                 <div className="strip-top">
                   <div className="strip-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><rect x="2" y="7" width="20" height="14" rx="2"/><path d="M16 21V5a2 2 0 0 0-2-2h-4a2 2 0 0 0-2 2v16"/></svg></div>
-                  <div className="strip-num">50+</div>
+                  <div className="strip-num">{stats ? `${stats.total_owners}+` : '—'}</div>
                 </div>
                 <div className="strip-label">Media owners</div>
               </div>
@@ -318,57 +343,36 @@ export default function HomePage() {
               </Link>
             </div>
             <div className="screens-grid">
-              {/* Card 1 */}
-              <Link href="/screens/2" className="sc">
-                <div className="sc-thumb sc-thumb-bg1">
-                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5"><rect x="3" y="3" width="18" height="13" rx="2"/><path d="M8 21h8m-4-5v5"/></svg>
-                  <div className="sc-status"><span className="badge badge-green">● Online</span></div>
-                  <div className="sc-format"><span className="badge badge-navy">LCD</span></div>
-                </div>
-                <div className="sc-body">
-                  <div className="sc-name">Vincom Mega Mall — Atrium</div>
-                  <div className="sc-loc"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M21 10c0 7-9 13-9 13S3 17 3 10a9 9 0 0 1 18 0z"/><circle cx="12" cy="10" r="3"/></svg>Royal City, Thanh Xuân, HN</div>
-                  <div className="sc-tags"><span className="sc-pill">75&quot;</span><span className="sc-pill">4K</span><span className="sc-pill">Landscape</span><span className="sc-pill">15s</span></div>
-                  <div className="sc-footer">
-                    <div className="sc-impr"><strong>120K</strong> lượt/tuần</div>
-                    <div className="sc-lock"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><rect x="3" y="11" width="18" height="11" rx="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>Đăng nhập</div>
+              {featuredScreens.map(s => (
+                <Link key={s.id} href={screenHref(s.id)} className="sc">
+                  <div className={`sc-thumb sc-thumb-${s.thumb}`}>
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" width="56" height="56" dangerouslySetInnerHTML={{__html: iconSVG[s.venue] || ''}}/>
+                    <div className="sc-status"><span className="badge badge-green">● Online</span></div>
+                    <div className="sc-format"><span className="badge badge-navy">{s.type}</span></div>
                   </div>
-                </div>
-              </Link>
-              {/* Card 2 */}
-              <Link href="/screens/1" className="sc">
-                <div className="sc-thumb sc-thumb-bg2">
-                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5"><rect x="2" y="7" width="20" height="14" rx="2"/><path d="M16 21V5a2 2 0 0 0-2-2h-4a2 2 0 0 0-2 2v16"/></svg>
-                  <div className="sc-status"><span className="badge badge-green">● Online</span></div>
-                  <div className="sc-format"><span className="badge badge-navy">Billboard</span></div>
-                </div>
-                <div className="sc-body">
-                  <div className="sc-name">Billboard Nút Giao Cầu Giấy</div>
-                  <div className="sc-loc"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M21 10c0 7-9 13-9 13S3 17 3 10a9 9 0 0 1 18 0z"/><circle cx="12" cy="10" r="3"/></svg>Xuân Thủy, Cầu Giấy, HN</div>
-                  <div className="sc-tags"><span className="sc-pill">14×6m</span><span className="sc-pill">LED</span><span className="sc-pill">Landscape</span><span className="sc-pill">15s</span></div>
-                  <div className="sc-footer">
-                    <div className="sc-impr"><strong>380K</strong> lượt/tuần</div>
-                    <div className="sc-lock"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><rect x="3" y="11" width="18" height="11" rx="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>Đăng nhập</div>
+                  <div className="sc-body">
+                    <div className="sc-name">{s.name}</div>
+                    <div className="sc-loc">
+                      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" width="12" height="12"><path d="M21 10c0 7-9 13-9 13S3 17 3 10a9 9 0 0 1 18 0z"/><circle cx="12" cy="10" r="3"/></svg>
+                      {s.loc}
+                    </div>
+                    <div className="sc-tags">
+                      <span className="sc-pill">{s.size}</span>
+                      <span className="sc-pill">{s.orientation}</span>
+                      <span className="sc-pill">{s.slot_duration_sec}s</span>
+                    </div>
+                    <div className="sc-footer">
+                      <div className="sc-impr">
+                        {s.weekly > 0
+                          ? <><strong>{(s.weekly/1000).toFixed(0)}K</strong> lượt/tuần</>
+                          : <><strong>{(s.price_per_slot_vnd/1000).toFixed(0)}K</strong> /slot</>
+                        }
+                      </div>
+                      <div className="sc-lock"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" width="12" height="12"><rect x="3" y="11" width="18" height="11" rx="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>Đăng nhập</div>
+                    </div>
                   </div>
-                </div>
-              </Link>
-              {/* Card 3 */}
-              <Link href="/screens/3" className="sc">
-                <div className="sc-thumb sc-thumb-bg3">
-                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5"><path d="M18 8h1a4 4 0 0 1 0 8h-1"/><path d="M2 8h16v9a4 4 0 0 1-4 4H6a4 4 0 0 1-4-4V8z"/><line x1="6" y1="1" x2="6" y2="4"/><line x1="10" y1="1" x2="10" y2="4"/><line x1="14" y1="1" x2="14" y2="4"/></svg>
-                  <div className="sc-status"><span className="badge badge-green">● Online</span></div>
-                  <div className="sc-format"><span className="badge badge-navy">LCD</span></div>
-                </div>
-                <div className="sc-body">
-                  <div className="sc-name">The Coffee House — Nguyễn Huệ</div>
-                  <div className="sc-loc"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M21 10c0 7-9 13-9 13S3 17 3 10a9 9 0 0 1 18 0z"/><circle cx="12" cy="10" r="3"/></svg>Lê Thánh Tôn, Quận 1, HCM</div>
-                  <div className="sc-tags"><span className="sc-pill">55&quot;</span><span className="sc-pill">Portrait</span><span className="sc-pill">15s</span></div>
-                  <div className="sc-footer">
-                    <div className="sc-impr"><strong>85K</strong> lượt/tuần</div>
-                    <div className="sc-lock"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><rect x="3" y="11" width="18" height="11" rx="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>Đăng nhập</div>
-                  </div>
-                </div>
-              </Link>
+                </Link>
+              ))}
             </div>
           </div>
         </section>
@@ -415,17 +419,19 @@ export default function HomePage() {
             </div>
             <div className="venues">
               {[
-                { name:'Retail', count:'320 screens', path:<><path d="m2 7 4.41-4.41A2 2 0 0 1 7.83 2h8.34a2 2 0 0 1 1.42.59L22 7"/><path d="M4 12v8a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-8"/><path d="M15 22v-4a2 2 0 0 0-2-2h-2a2 2 0 0 0-2 2v4"/><path d="M2 7h20"/><path d="M22 7v3a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V7"/></> },
-                { name:'Outdoor', count:'185 screens', path:<><rect x="2" y="7" width="20" height="14" rx="2"/><path d="M16 21V5a2 2 0 0 0-2-2h-4a2 2 0 0 0-2 2v16"/></> },
-                { name:'F&B', count:'240 screens', path:<><path d="M18 8h1a4 4 0 0 1 0 8h-1"/><path d="M2 8h16v9a4 4 0 0 1-4 4H6a4 4 0 0 1-4-4V8z"/><line x1="6" y1="1" x2="6" y2="4"/><line x1="10" y1="1" x2="10" y2="4"/><line x1="14" y1="1" x2="14" y2="4"/></> },
-                { name:'Transit', count:'98 screens', path:<><rect x="3" y="11" width="18" height="11" rx="2"/><path d="M7 11V7a5 5 0 0 1 9.9-1"/><path d="m3 11 3-9 3 6 3-3 3 6 3-6 3 6"/></> },
-                { name:'Office', count:'156 screens', path:<><rect x="3" y="3" width="18" height="18" rx="2"/><path d="M3 9h18M9 21V9"/></> },
-                { name:'Entertainment', count:'201 screens', path:<><circle cx="12" cy="12" r="10"/><polygon points="10 8 16 12 10 16 10 8"/></> },
+                { name:'Retail',        path:<><path d="m2 7 4.41-4.41A2 2 0 0 1 7.83 2h8.34a2 2 0 0 1 1.42.59L22 7"/><path d="M4 12v8a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-8"/><path d="M15 22v-4a2 2 0 0 0-2-2h-2a2 2 0 0 0-2 2v4"/><path d="M2 7h20"/><path d="M22 7v3a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V7"/></> },
+                { name:'Outdoor',       path:<><rect x="2" y="7" width="20" height="14" rx="2"/><path d="M16 21V5a2 2 0 0 0-2-2h-4a2 2 0 0 0-2 2v16"/></> },
+                { name:'F&B',           path:<><path d="M18 8h1a4 4 0 0 1 0 8h-1"/><path d="M2 8h16v9a4 4 0 0 1-4 4H6a4 4 0 0 1-4-4V8z"/><line x1="6" y1="1" x2="6" y2="4"/><line x1="10" y1="1" x2="10" y2="4"/><line x1="14" y1="1" x2="14" y2="4"/></> },
+                { name:'Transit',       path:<><rect x="3" y="11" width="18" height="11" rx="2"/><path d="M7 11V7a5 5 0 0 1 9.9-1"/><path d="m3 11 3-9 3 6 3-3 3 6 3-6 3 6"/></> },
+                { name:'Office',        path:<><rect x="3" y="3" width="18" height="18" rx="2"/><path d="M3 9h18M9 21V9"/></> },
+                { name:'Entertainment', path:<><circle cx="12" cy="12" r="10"/><polygon points="10 8 16 12 10 16 10 8"/></> },
               ].map(v => (
                 <Link key={v.name} href="/browse" className="venue">
                   <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5">{v.path}</svg>
                   <div className="venue-name">{v.name}</div>
-                  <div className="venue-count">{v.count}</div>
+                  <div className="venue-count">
+                    {venueCount(v.name) > 0 ? `${venueCount(v.name).toLocaleString('vi-VN')} màn hình` : '—'}
+                  </div>
                 </Link>
               ))}
             </div>
@@ -497,11 +503,16 @@ export default function HomePage() {
             </div>
             <div className="owners-strip">
               {featuredOwners.map(o => (
-                <Link key={o.slug} href={`/owners/${o.slug}`} className="os-card">
-                  <div className="os-logo">{o.emoji}</div>
+                <Link key={o.owner_id} href={`/owners/${o.owner_id}`} className="os-card">
+                  <div className="os-logo">
+                    {o.logo_url
+                      ? <img src={o.logo_url} alt={o.name} style={{width:'100%',height:'100%',objectFit:'contain',borderRadius:'inherit'}}/>
+                      : o.name.slice(0, 2).toUpperCase()
+                    }
+                  </div>
                   <div>
                     <div className="os-name">{o.name}</div>
-                    <div className="os-count">{o.screens} màn hình · {o.venues[0]}</div>
+                    <div className="os-count">{o.screen_count} màn hình · {o.venue_types[0] ?? ''}</div>
                   </div>
                 </Link>
               ))}

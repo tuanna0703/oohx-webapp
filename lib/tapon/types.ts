@@ -99,6 +99,46 @@ export interface ScreenListParams {
   updated_after?: string // ISO8601
 }
 
+// ─── Stats ────────────────────────────────────────────────────────────────────
+
+export interface InventoryStats {
+  total_screens: number
+  total_cities:  number
+  total_owners:  number
+  venues: { type: string; label: string; count: number }[]
+  cities: { code: string; name: string; count: number }[]
+}
+
+// ─── Owners ───────────────────────────────────────────────────────────────────
+
+export interface TapOnOwner {
+  owner_id:     string        // slug — dùng cho URL /owners/:owner_id
+  name:         string
+  tagline:      string | null
+  logo_url:     string | null
+  cover_url:    string | null
+  screen_count: number
+  city_count:   number
+  venue_types:  string[]
+  website:      string | null
+  email:        string | null
+  phone:        string | null
+  founded:      number | null
+  featured:     boolean
+  headquarters: { lat: number; lng: number } | null
+}
+
+export interface TapOnOwnerDetail extends TapOnOwner {
+  about: string | null        // Chỉ có ở GET /inventory/owners/:slug
+}
+
+export interface OwnersListResponse {
+  total: number
+  page:  number
+  limit: number
+  data:  TapOnOwner[]
+}
+
 // ─── Map endpoint ─────────────────────────────────────────────────────────────
 // Lightweight response từ GET /inventory/screens/map — chỉ các field cần cho bản đồ
 
