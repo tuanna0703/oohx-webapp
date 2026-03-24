@@ -56,7 +56,7 @@ export default function MapBrowse({ screens }: Props) {
       <div style="font-family:'Open Sans',sans-serif;padding:4px">
         <div style="font-weight:700;font-size:13px;color:#0D0F2B;margin-bottom:2px">📍 ${loc}</div>
         <div style="font-size:11px;color:#737899;margin-bottom:8px">${items.length} màn hình tại đây</div>
-        <div style="max-height:260px;overflow-y:auto;display:flex;flex-direction:column;gap:3px">
+        <div style="max-height:180px;overflow-y:auto;display:flex;flex-direction:column;gap:3px">
           ${rows}
         </div>
       </div>`;
