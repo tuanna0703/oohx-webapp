@@ -4,8 +4,7 @@ const nextConfig = {
   images: {
     domains: [],
   },
-  // Transpile leaflet.markercluster since it uses CommonJS
-  transpilePackages: ['leaflet', 'react-leaflet'],
+  transpilePackages: [],
 }
 
 module.exports = nextConfig

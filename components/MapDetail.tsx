@@ -1,57 +1,54 @@
 'use client';
 import { useEffect, useRef } from 'react';
-import { useLoadScript } from '@react-google-maps/api';
+import 'maplibre-gl/dist/maplibre-gl.css';
 
 interface Props {
   lat: number;
   lng: number;
 }
 
-const LIBRARIES: ('places')[] = [];
-
 export default function MapDetail({ lat, lng }: Props) {
-  const { isLoaded } = useLoadScript({
-    googleMapsApiKey: process.env.NEXT_PUBLIC_GOOGLE_MAPS_KEY!,
-    libraries: LIBRARIES,
-  });
-
   const containerRef = useRef<HTMLDivElement>(null);
-  const mapRef       = useRef<google.maps.Map | null>(null);
+  const mapRef       = useRef<import('maplibre-gl').Map | null>(null);
 
   useEffect(() => {
-    if (!isLoaded || !containerRef.current) return;
+    if (!containerRef.current) return;
 
-    if (!mapRef.current) {
-      mapRef.current = new google.maps.Map(containerRef.current, {
-        center: { lat, lng },
-        zoom: 16,
-        mapTypeControl: false,
-        streetViewControl: false,
-        fullscreenControl: false,
-        zoomControl: false,
-        scrollwheel: false,
-        gestureHandling: 'none',
-        styles: [
-          { featureType: 'poi', elementType: 'labels', stylers: [{ visibility: 'off' }] },
-        ],
+    let map: import('maplibre-gl').Map;
+
+    import('maplibre-gl').then(({ Map, Marker }) => {
+      if (!containerRef.current) return;
+
+      map = new Map({
+        container: containerRef.current,
+        style:  'https://tiles.openfreemap.org/styles/liberty',
+        center: [lng, lat],
+        zoom:   15,
+        interactive:        false,
+        attributionControl: false,
       });
 
-      new google.maps.Marker({
-        position: { lat, lng },
-        map: mapRef.current,
-        icon: {
-          path: google.maps.SymbolPath.CIRCLE,
-          fillColor: '#3B47F0',
-          fillOpacity: 1,
-          strokeColor: '#fff',
-          strokeWeight: 3,
-          scale: 10,
-        },
+      map.on('load', () => {
+        // Marker
+        const el = document.createElement('div');
+        el.style.cssText = `
+          width:18px;height:18px;
+          background:#3B47F0;
+          border:3px solid #fff;
+          border-radius:50%;
+          box-shadow:0 2px 6px rgba(59,71,240,.4);
+        `;
+        new Marker({ element: el }).setLngLat([lng, lat]).addTo(map);
       });
-    } else {
-      mapRef.current.setCenter({ lat, lng });
-    }
-  }, [isLoaded, lat, lng]);
+
+      mapRef.current = map;
+    });
+
+    return () => {
+      map?.remove();
+      mapRef.current = null;
+    };
+  }, [lat, lng]);
 
   return (
     <div
