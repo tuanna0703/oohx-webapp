@@ -5,15 +5,15 @@ import Link from 'next/link';
 import dynamic from 'next/dynamic';
 import { iconSVG, screenHref } from '@/lib/data';
 import type { Screen } from '@/lib/types';
+import type { VenueTypeNode } from '@/lib/tapon/types';
 
 const MapBrowse = dynamic(() => import('@/components/MapBrowse'), { ssr: false });
 
 const cities      = ['Hà Nội', 'TP.HCM', 'Đà Nẵng', 'Hải Phòng', 'Cần Thơ'];
-const venueTypes  = ['Retail', 'Outdoor', 'F&B', 'Transit', 'Office'];
 const formats     = ['LCD', 'LED', 'Billboard'];
 const orientations = ['Landscape', 'Portrait'];
 
-// OOHX label → TapON API param
+// City label → API code
 const CITY_CODE: Record<string, string> = {
   'Hà Nội':    'hanoi',
   'TP.HCM':    'hcm',
@@ -21,21 +21,32 @@ const CITY_CODE: Record<string, string> = {
   'Hải Phòng': 'haiphong',
   'Cần Thơ':   'cantho',
 }
-const VENUE_CODE: Record<string, string> = {
-  Retail:  'mall',
-  Outdoor: 'outdoor',
-  'F&B':   'fnb',
-  Transit: 'transit',
-  Office:  'office',
-}
+// Format label → API code
 const FORMAT_CODE: Record<string, string> = {
   LCD: 'lcd', LED: 'led', Billboard: 'billboard',
 }
 
-// TapON API param → OOHX label (reverse maps)
+// Reverse maps for URL param → label init
 const CODE_CITY:   Record<string, string> = Object.fromEntries(Object.entries(CITY_CODE).map(([k, v]) => [v, k]));
-const CODE_VENUE:  Record<string, string> = Object.fromEntries(Object.entries(VENUE_CODE).map(([k, v]) => [v, k]));
 const CODE_FORMAT: Record<string, string> = Object.fromEntries(Object.entries(FORMAT_CODE).map(([k, v]) => [v, k]));
+
+// Fallback venue types khi /api/venue-types chưa trả về
+const VENUE_FALLBACK: VenueTypeNode[] = [
+  { type: 'mall',    label: 'Retail',  count: 0, children: [] },
+  { type: 'outdoor', label: 'Outdoor', count: 0, children: [] },
+  { type: 'fnb',     label: 'F&B',     count: 0, children: [] },
+  { type: 'transit', label: 'Transit', count: 0, children: [] },
+  { type: 'office',  label: 'Office',  count: 0, children: [] },
+];
+
+function flattenVenueTypes(nodes: VenueTypeNode[]): VenueTypeNode[] {
+  const result: VenueTypeNode[] = [];
+  for (const node of nodes) {
+    result.push(node);
+    for (const child of node.children) result.push(child);
+  }
+  return result;
+}
 
 export default function BrowsePage() {
   return (
@@ -52,10 +63,21 @@ function BrowsePageInner() {
   const [filterPanel, setFilterPanel] = useState(true);
   const [searchQ, setSearchQ]         = useState(() => sp.get('q') ?? '');
   const [selCities, setSelCities]     = useState<string[]>(() => sp.getAll('city[]').map(c => CODE_CITY[c]).filter(Boolean));
-  const [selVenues, setSelVenues]     = useState<string[]>(() => sp.getAll('venue_type[]').map(v => CODE_VENUE[v]).filter(Boolean));
+  // selVenues lưu API type codes trực tiếp (không qua label mapping)
+  const [selVenues, setSelVenues]     = useState<string[]>(() => sp.getAll('venue_type[]'));
   const [selFormats, setSelFormats]   = useState<string[]>(() => sp.getAll('screen_type[]').map(f => CODE_FORMAT[f]).filter(Boolean));
   const [selOri, setSelOri]           = useState<string[]>(() => sp.getAll('orientation[]'));
   const [sortBy, setSortBy]           = useState(() => sp.get('sort') ?? '');
+
+  // Venue types dynamic từ API
+  const [venueTypeList, setVenueTypeList] = useState<VenueTypeNode[]>(VENUE_FALLBACK);
+
+  useEffect(() => {
+    fetch('/api/venue-types')
+      .then(r => r.json())
+      .then(data => { if (data?.data?.length > 0) setVenueTypeList(flattenVenueTypes(data.data)); })
+      .catch(() => {});
+  }, []);
 
   const [screens, setScreens] = useState<Screen[]>([]);
   const [loading, setLoading] = useState(true);
@@ -86,7 +108,7 @@ function BrowsePageInner() {
 
     // Multi-value params — gửi tất cả giá trị đã chọn lên server
     selCities.forEach(c => params.append('city[]',        CITY_CODE[c]   ?? c));
-    selVenues.forEach(v => params.append('venue_type[]',  VENUE_CODE[v]  ?? v));
+    selVenues.forEach(v => params.append('venue_type[]',  v));               // codes trực tiếp
     selFormats.forEach(f => params.append('screen_type[]', FORMAT_CODE[f] ?? f.toLowerCase()));
     selOri.forEach(o => params.append('orientation[]', o.toLowerCase()));
 
@@ -148,8 +170,14 @@ function BrowsePageInner() {
           <div className="filter-group">
             <div className="filter-group-label">Loại venue</div>
             <div className="chips">
-              {venueTypes.map(v => (
-                <div key={v} className={`chip${selVenues.includes(v) ? ' on' : ''}`} onClick={() => setSelVenues(p => toggle(p, v))}>{v}</div>
+              {venueTypeList.map(vt => (
+                <div
+                  key={vt.type}
+                  className={`chip${selVenues.includes(vt.type) ? ' on' : ''}${vt.type.includes('.') ? ' chip-child' : ''}`}
+                  onClick={() => setSelVenues(p => toggle(p, vt.type))}
+                >
+                  {vt.label}
+                </div>
               ))}
             </div>
           </div>
