@@ -98,7 +98,7 @@ export async function GET(req: NextRequest) {
   } catch (err) {
     const message = err instanceof Error ? err.message : 'Unknown error'
     console.error('[/api/screens] TapON error:', message)
-    return NextResponse.json({ error: 'Failed to load screens' }, { status: 502 })
+    return NextResponse.json({ error: 'Failed to load screens', detail: message }, { status: 502 })
   }
 }
 
