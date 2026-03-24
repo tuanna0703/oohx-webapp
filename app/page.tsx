@@ -62,7 +62,12 @@ export default function HomePage() {
 
   function doSearch() {
     setOpenField(null);
-    router.push('/browse');
+    const params = new URLSearchParams();
+    if (hsState.loc !== 'all')   params.append('city[]',        hsState.loc);
+    if (hsState.venue !== 'all') params.append('venue_type[]',  hsState.venue);
+    if (hsState.type !== 'all')  params.append('screen_type[]', hsState.type);
+    const qs = params.toString();
+    router.push(`/browse${qs ? `?${qs}` : ''}`);
   }
 
   const filteredLocs = (stats?.cities ?? []).filter(c =>

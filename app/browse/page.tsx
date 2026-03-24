@@ -1,5 +1,6 @@
 'use client';
 import { useState, useEffect } from 'react';
+import { useSearchParams } from 'next/navigation';
 import Link from 'next/link';
 import dynamic from 'next/dynamic';
 import { iconSVG, screenHref } from '@/lib/data';
@@ -31,15 +32,22 @@ const FORMAT_CODE: Record<string, string> = {
   LCD: 'lcd', LED: 'led', Billboard: 'billboard',
 }
 
+// TapON API param → OOHX label (reverse maps)
+const CODE_CITY:   Record<string, string> = Object.fromEntries(Object.entries(CITY_CODE).map(([k, v]) => [v, k]));
+const CODE_VENUE:  Record<string, string> = Object.fromEntries(Object.entries(VENUE_CODE).map(([k, v]) => [v, k]));
+const CODE_FORMAT: Record<string, string> = Object.fromEntries(Object.entries(FORMAT_CODE).map(([k, v]) => [v, k]));
+
 export default function BrowsePage() {
+  const sp = useSearchParams();
+
   const [view, setView]               = useState<'map' | 'list'>('map');
   const [filterPanel, setFilterPanel] = useState(true);
-  const [searchQ, setSearchQ]         = useState('');
-  const [selCities, setSelCities]     = useState<string[]>([]);
-  const [selVenues, setSelVenues]     = useState<string[]>([]);
-  const [selFormats, setSelFormats]   = useState<string[]>([]);
-  const [selOri, setSelOri]           = useState<string[]>([]);
-  const [sortBy, setSortBy]           = useState('');
+  const [searchQ, setSearchQ]         = useState(() => sp.get('q') ?? '');
+  const [selCities, setSelCities]     = useState<string[]>(() => sp.getAll('city[]').map(c => CODE_CITY[c]).filter(Boolean));
+  const [selVenues, setSelVenues]     = useState<string[]>(() => sp.getAll('venue_type[]').map(v => CODE_VENUE[v]).filter(Boolean));
+  const [selFormats, setSelFormats]   = useState<string[]>(() => sp.getAll('screen_type[]').map(f => CODE_FORMAT[f]).filter(Boolean));
+  const [selOri, setSelOri]           = useState<string[]>(() => sp.getAll('orientation[]'));
+  const [sortBy, setSortBy]           = useState(() => sp.get('sort') ?? '');
 
   const [screens, setScreens] = useState<Screen[]>([]);
   const [loading, setLoading] = useState(true);
