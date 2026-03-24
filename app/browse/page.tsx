@@ -3,7 +3,6 @@ import { useState, useEffect } from 'react';
 import Link from 'next/link';
 import dynamic from 'next/dynamic';
 import { iconSVG, screenHref } from '@/lib/data';
-import type { Screen } from '@/lib/types';
 
 const MapBrowse = dynamic(() => import('@/components/MapBrowse'), { ssr: false });
 
@@ -40,7 +39,6 @@ export default function BrowsePage() {
   const [selFormats, setSelFormats]   = useState<string[]>([]);
   const [selOri, setSelOri]           = useState<string[]>([]);
   const [sortBy, setSortBy]           = useState('');
-  const [selected, setSelected]       = useState<Screen | null>(null);
 
   const [screens, setScreens] = useState<Screen[]>([]);
   const [loading, setLoading] = useState(true);
@@ -218,20 +216,7 @@ export default function BrowsePage() {
         {/* Map view */}
         {!loading && view === 'map' && (
           <div id="map-view-wrap" style={{flex:1,display:'flex',flexDirection:'column'}}>
-            <MapBrowse screens={screens} onScreenSelect={setSelected}/>
-            {selected && (
-              <div style={{position:'absolute',bottom:'16px',right:'16px',zIndex:20,background:'#fff',borderRadius:'var(--r)',boxShadow:'var(--sh-l)',padding:'14px',maxWidth:'260px'}}>
-                <button style={{position:'absolute',top:'8px',right:'8px',width:'22px',height:'22px',borderRadius:'50%',background:'var(--g100)',border:'none',cursor:'pointer',display:'flex',alignItems:'center',justifyContent:'center',fontSize:'11px'}} onClick={() => setSelected(null)}>✕</button>
-                <div style={{fontWeight:700,fontSize:'13px',color:'var(--navy)',marginBottom:'4px',paddingRight:'20px'}}>{selected.name}</div>
-                <div style={{fontSize:'11px',color:'var(--g500)',marginBottom:'8px'}}>{selected.loc}</div>
-                <div style={{display:'flex',gap:'4px',flexWrap:'wrap'}}>
-                  <span className="badge badge-blue">{selected.venue}</span>
-                  <span className="badge badge-gray">{selected.type}</span>
-                  <span className="badge badge-gray">{selected.size}</span>
-                </div>
-                <Link href={screenHref(selected.id)} className="btn btn-primary btn-sm mt-8" style={{width:'100%',justifyContent:'center'}}>Xem chi tiết</Link>
-              </div>
-            )}
+            <MapBrowse screens={screens} />
           </div>
         )}
 

@@ -122,7 +122,7 @@ export function mapMapScreenList(list: MapScreenItem[]): Screen[] {
     return {
       id:                m.screen_id,
       name:              m.name,
-      loc:               m.location.address,
+      loc:               m.location.address ?? '',
       venue,
       type,
       size:              m.size,
