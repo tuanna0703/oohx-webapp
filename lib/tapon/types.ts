@@ -89,9 +89,28 @@ export interface TapOnApiError {
 export interface ScreenListParams {
   page?: number
   limit?: number
-  city?: string
-  venue_type?: 'mall' | 'outdoor' | 'fnb' | 'transit' | 'office'
-  screen_type?: 'lcd' | 'led' | 'billboard'
+  city?: string | string[]
+  venue_type?: string | string[]
+  screen_type?: string | string[]
+  orientation?: string | string[]
+  q?: string
+  sort?: 'price_asc' | 'price_desc' | 'newest'
   status?: 'active' | 'inactive'
   updated_after?: string // ISO8601
+}
+
+// ─── Map endpoint ─────────────────────────────────────────────────────────────
+// Lightweight response từ GET /inventory/screens/map — chỉ các field cần cho bản đồ
+
+export interface MapScreenItem {
+  screen_id: string
+  name: string
+  venue_type: string   // param value: mall | outdoor | fnb | transit | office
+  screen_type: string  // lcd | led | billboard
+  size: string         // pre-formatted bởi Laravel, vd: "14×6m" hoặc "55\""
+  location: {
+    address: string
+    lat: number
+    lng: number
+  }
 }

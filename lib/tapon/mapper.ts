@@ -1,10 +1,19 @@
 // TapON SSP — Data mapper
 // Chuyển đổi TapOnScreen → Screen (OOHX internal type)
 
-import type { TapOnScreen } from './types'
+import type { TapOnScreen, MapScreenItem } from './types'
 import type { Screen } from '../types'
 
 // ─── Lookup maps ──────────────────────────────────────────────────────────────
+
+// venue_type từ query param (mall/outdoor/fnb/transit/office) → OOHX label
+const VENUE_PARAM_MAP: Record<string, string> = {
+  mall:    'Retail',
+  outdoor: 'Outdoor',
+  fnb:     'F&B',
+  transit: 'Transit',
+  office:  'Office',
+}
 
 // venue_type từ TapON là string mô tả tự do, vd: "Malls : Concourse", "Outdoor : Billboard"
 function mapVenue(raw: string | null | undefined): string {
@@ -101,4 +110,35 @@ export function mapScreen(s: TapOnScreen): Screen {
 
 export function mapScreenList(list: TapOnScreen[]): Screen[] {
   return list.map(mapScreen)
+}
+
+// ─── Map endpoint mapper ───────────────────────────────────────────────────────
+// MapScreenItem (lightweight) → Screen (fields cần thiết cho MapBrowse + selected panel)
+
+export function mapMapScreenList(list: MapScreenItem[]): Screen[] {
+  return list.map(m => {
+    const venue = VENUE_PARAM_MAP[m.venue_type] ?? mapVenue(m.venue_type)
+    const type  = TYPE_MAP[m.screen_type as keyof typeof TYPE_MAP] ?? m.screen_type.toUpperCase()
+    return {
+      id:                m.screen_id,
+      name:              m.name,
+      loc:               m.location.address,
+      venue,
+      type,
+      size:              m.size,
+      lat:               m.location.lat,
+      lng:               m.location.lng,
+      color:             COLOR_MAP[venue] ?? 'blue',
+      // Fields không có trong map response — zero defaults (không hiển thị ở map view)
+      weekly:            0,
+      price_per_slot_vnd: 0,
+      thumb:             'bg1',
+      owner:             '',
+      owner_name:        '',
+      slot_duration_sec: 15,
+      slots_per_loop:    8,
+      min_booking_days:  7,
+      orientation:       'landscape',
+    }
+  })
 }

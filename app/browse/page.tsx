@@ -1,5 +1,5 @@
 'use client';
-import { useState, useEffect, useMemo } from 'react';
+import { useState, useEffect } from 'react';
 import Link from 'next/link';
 import dynamic from 'next/dynamic';
 import { iconSVG, screenHref } from '@/lib/data';
@@ -7,18 +7,18 @@ import type { Screen } from '@/lib/types';
 
 const MapBrowse = dynamic(() => import('@/components/MapBrowse'), { ssr: false });
 
-const cities     = ['Hà Nội', 'TP.HCM', 'Đà Nẵng', 'Hải Phòng', 'Cần Thơ'];
-const venueTypes = ['Retail', 'Outdoor', 'F&B', 'Transit', 'Office'];
-const formats    = ['LCD', 'LED', 'Billboard'];
+const cities      = ['Hà Nội', 'TP.HCM', 'Đà Nẵng', 'Hải Phòng', 'Cần Thơ'];
+const venueTypes  = ['Retail', 'Outdoor', 'F&B', 'Transit', 'Office'];
+const formats     = ['LCD', 'LED', 'Billboard'];
 const orientations = ['Landscape', 'Portrait'];
 
 // OOHX label → TapON API param
 const CITY_CODE: Record<string, string> = {
-  'Hà Nội':   'hanoi',
-  'TP.HCM':   'hcm',
-  'Đà Nẵng':  'danang',
-  'Hải Phòng':'haiphong',
-  'Cần Thơ':  'cantho',
+  'Hà Nội':    'hanoi',
+  'TP.HCM':    'hcm',
+  'Đà Nẵng':   'danang',
+  'Hải Phòng': 'haiphong',
+  'Cần Thơ':   'cantho',
 }
 const VENUE_CODE: Record<string, string> = {
   Retail:  'mall',
@@ -26,6 +26,9 @@ const VENUE_CODE: Record<string, string> = {
   'F&B':   'fnb',
   Transit: 'transit',
   Office:  'office',
+}
+const FORMAT_CODE: Record<string, string> = {
+  LCD: 'lcd', LED: 'led', Billboard: 'billboard',
 }
 
 export default function BrowsePage() {
@@ -36,72 +39,58 @@ export default function BrowsePage() {
   const [selVenues, setSelVenues]     = useState<string[]>([]);
   const [selFormats, setSelFormats]   = useState<string[]>([]);
   const [selOri, setSelOri]           = useState<string[]>([]);
+  const [sortBy, setSortBy]           = useState('');
   const [selected, setSelected]       = useState<Screen | null>(null);
 
-  const [screens, setScreens]   = useState<Screen[]>([]);
-  const [loading, setLoading]   = useState(true);
-  const [total, setTotal]       = useState(0);
-  const [page, setPage]         = useState(1);
+  const [screens, setScreens] = useState<Screen[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [total, setTotal]     = useState(0);
+  const [page, setPage]       = useState(1);
 
-  const PAGE_SIZE = 24;
+  const PAGE_SIZE  = 24;
   const totalPages = Math.ceil(total / PAGE_SIZE);
 
   function toggle<T>(arr: T[], val: T): T[] {
     return arr.includes(val) ? arr.filter(x => x !== val) : [...arr, val];
   }
 
-  // Reset về page 1 khi filter hoặc view thay đổi
-  useEffect(() => { setPage(1) }, [view, selCities, selVenues, selFormats, searchQ])
+  // Reset về page 1 khi bất kỳ filter thay đổi
+  useEffect(() => { setPage(1) }, [view, selCities, selVenues, selFormats, selOri, searchQ, sortBy]);
 
   // ── Fetch từ /api/screens ──────────────────────────────────────────────────
   useEffect(() => {
-    const controller = new AbortController()
-    const params = new URLSearchParams()
+    const controller = new AbortController();
+    const params = new URLSearchParams();
 
     if (view === 'map') {
-      // Map: lấy toàn bộ (parallel pagination server-side)
-      params.set('all', 'true')
+      params.set('all', 'true');
     } else {
-      // List: 24 màn hình / trang
-      params.set('limit', String(PAGE_SIZE))
-      params.set('page', String(page))
+      params.set('limit', String(PAGE_SIZE));
+      params.set('page',  String(page));
     }
 
-    if (selCities.length === 1 && CITY_CODE[selCities[0]])
-      params.set('city', CITY_CODE[selCities[0]])
-    if (selVenues.length === 1 && VENUE_CODE[selVenues[0]])
-      params.set('venue_type', VENUE_CODE[selVenues[0]])
+    // Multi-value params — gửi tất cả giá trị đã chọn lên server
+    selCities.forEach(c => params.append('city[]',        CITY_CODE[c]   ?? c));
+    selVenues.forEach(v => params.append('venue_type[]',  VENUE_CODE[v]  ?? v));
+    selFormats.forEach(f => params.append('screen_type[]', FORMAT_CODE[f] ?? f.toLowerCase()));
+    selOri.forEach(o => params.append('orientation[]', o.toLowerCase()));
 
-    setLoading(true)
+    if (searchQ) params.set('q',    searchQ);
+    if (sortBy)  params.set('sort', sortBy);
+
+    setLoading(true);
 
     fetch(`/api/screens?${params}`, { signal: controller.signal })
       .then(r => r.json())
       .then(data => {
-        setScreens(data.data ?? [])
-        setTotal(data.total ?? 0)
+        setScreens(data.data ?? []);
+        setTotal(data.total ?? 0);
       })
-      .catch(err => { if (err.name !== 'AbortError') setScreens([]) })
-      .finally(() => setLoading(false))
+      .catch(err => { if (err.name !== 'AbortError') setScreens([]); })
+      .finally(() => setLoading(false));
 
-    return () => controller.abort()
-  }, [view, selCities, selVenues, page])
-
-  // ── Client-side filter: text search + format + multi-city/venue ────────────
-  const filtered = useMemo(() => {
-    return screens.filter(s => {
-      if (searchQ && !s.name.toLowerCase().includes(searchQ.toLowerCase()) &&
-          !s.loc.toLowerCase().includes(searchQ.toLowerCase())) return false;
-      if (selFormats.length > 0 && !selFormats.includes(s.type)) return false;
-      // Multi-city: khi chọn nhiều hơn 1 thì filter client-side
-      if (selCities.length > 1) {
-        const match = selCities.some(c => s.loc.includes(c === 'TP.HCM' ? 'Hồ Chí Minh' : c))
-        if (!match) return false;
-      }
-      // Multi-venue: khi chọn nhiều hơn 1 thì filter client-side
-      if (selVenues.length > 1 && !selVenues.includes(s.venue)) return false;
-      return true;
-    });
-  }, [screens, searchQ, selCities, selVenues, selFormats]);
+    return () => controller.abort();
+  }, [view, selCities, selVenues, selFormats, selOri, searchQ, sortBy, page]);
 
   function clearFilters() {
     setSearchQ('');
@@ -109,6 +98,7 @@ export default function BrowsePage() {
     setSelVenues([]);
     setSelFormats([]);
     setSelOri([]);
+    setSortBy('');
   }
 
   return (
@@ -191,15 +181,16 @@ export default function BrowsePage() {
             <div className="browse-count">
               {loading
                 ? <span style={{color:'var(--g400)'}}>Đang tải...</span>
-                : <><strong>{filtered.length}</strong> màn hình{total > filtered.length ? ` / ${total} tổng` : ''}</>
+                : <><strong>{total}</strong> màn hình</>
               }
             </div>
           </div>
           <div className="browse-toolbar-right">
-            <select className="sort-sel">
-              <option>Traffic cao nhất</option>
-              <option>CPM thấp nhất</option>
-              <option>Mới nhất</option>
+            <select className="sort-sel" value={sortBy} onChange={e => setSortBy(e.target.value)}>
+              <option value="">Mặc định</option>
+              <option value="price_asc">Giá thấp nhất</option>
+              <option value="price_desc">Giá cao nhất</option>
+              <option value="newest">Mới nhất</option>
             </select>
             <div className="view-toggle">
               <button className={`vt-btn${view === 'map' ? ' on' : ''}`} onClick={() => setView('map')}>
@@ -214,7 +205,7 @@ export default function BrowsePage() {
           </div>
         </div>
 
-        {/* Loading skeleton */}
+        {/* Loading */}
         {loading && (
           <div style={{display:'flex',alignItems:'center',justifyContent:'center',flex:1,padding:'60px',color:'var(--g400)',gap:'10px'}}>
             <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" style={{animation:'spin 1s linear infinite'}}>
@@ -227,7 +218,7 @@ export default function BrowsePage() {
         {/* Map view */}
         {!loading && view === 'map' && (
           <div id="map-view-wrap" style={{flex:1,display:'flex',flexDirection:'column'}}>
-            <MapBrowse screens={filtered} onScreenSelect={setSelected}/>
+            <MapBrowse screens={screens} onScreenSelect={setSelected}/>
             {selected && (
               <div style={{position:'absolute',bottom:'16px',right:'16px',zIndex:20,background:'#fff',borderRadius:'var(--r)',boxShadow:'var(--sh-l)',padding:'14px',maxWidth:'260px'}}>
                 <button style={{position:'absolute',top:'8px',right:'8px',width:'22px',height:'22px',borderRadius:'50%',background:'var(--g100)',border:'none',cursor:'pointer',display:'flex',alignItems:'center',justifyContent:'center',fontSize:'11px'}} onClick={() => setSelected(null)}>✕</button>
@@ -248,10 +239,10 @@ export default function BrowsePage() {
         {!loading && view === 'list' && (
           <div id="list-view-wrap" className="list-view-wrap">
             <div className="list-grid" id="list-grid">
-              {filtered.length === 0 ? (
+              {screens.length === 0 ? (
                 <div style={{padding:'60px',textAlign:'center',color:'var(--g500)',gridColumn:'1/-1'}}>Không tìm thấy màn hình nào.</div>
               ) : (
-                filtered.map(s => (
+                screens.map(s => (
                   <Link key={s.id} href={screenHref(s.id)} className="sc">
                     <div className={`sc-thumb sc-thumb-${s.thumb}`}>
                       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" width="56" height="56" dangerouslySetInnerHTML={{__html: iconSVG[s.venue] || ''}}/>
@@ -289,13 +280,12 @@ export default function BrowsePage() {
                 <button
                   className="btn btn-ghost btn-sm"
                   disabled={page === 1}
-                  onClick={() => { setPage(p => p - 1); window.scrollTo(0,0) }}
+                  onClick={() => { setPage(p => p - 1); window.scrollTo(0,0); }}
                 >
                   ← Trước
                 </button>
 
                 {Array.from({length: Math.min(totalPages, 7)}, (_, i) => {
-                  // Hiển thị tối đa 7 số trang xung quanh trang hiện tại
                   let p: number;
                   if (totalPages <= 7) p = i + 1;
                   else if (page <= 4) p = i + 1;
@@ -306,7 +296,7 @@ export default function BrowsePage() {
                       key={p}
                       className={`btn btn-sm${p === page ? ' btn-primary' : ' btn-ghost'}`}
                       style={{minWidth:'36px'}}
-                      onClick={() => { setPage(p); window.scrollTo(0,0) }}
+                      onClick={() => { setPage(p); window.scrollTo(0,0); }}
                     >
                       {p}
                     </button>
@@ -316,7 +306,7 @@ export default function BrowsePage() {
                 <button
                   className="btn btn-ghost btn-sm"
                   disabled={page === totalPages}
-                  onClick={() => { setPage(p => p + 1); window.scrollTo(0,0) }}
+                  onClick={() => { setPage(p => p + 1); window.scrollTo(0,0); }}
                 >
                   Sau →
                 </button>

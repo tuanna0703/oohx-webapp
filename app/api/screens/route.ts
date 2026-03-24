@@ -2,12 +2,11 @@
 // Browser → đây → ssp.tapon.vn (client_secret không bao giờ ra browser)
 
 import { NextRequest, NextResponse } from 'next/server'
-import { getScreens, getAllScreens } from '@/lib/tapon/inventory'
-import { mapScreenList } from '@/lib/tapon/mapper'
+import { getScreens, getMapScreens } from '@/lib/tapon/inventory'
+import { mapScreenList, mapMapScreenList } from '@/lib/tapon/mapper'
 import type { ScreenListParams } from '@/lib/tapon/types'
 
 // ─── In-memory cache (per Lambda warm instance) ───────────────────────────────
-// Tránh gọi lại TapON mỗi request trong cùng một Lambda instance
 interface CacheEntry { data: unknown; exp: number }
 const memCache = new Map<string, CacheEntry>()
 
@@ -21,23 +20,35 @@ function setCached(key: string, data: unknown, ttlMs: number) {
   memCache.set(key, { data, exp: Date.now() + ttlMs })
 }
 
+// ─── Helpers ──────────────────────────────────────────────────────────────────
+
+// Đọc param đơn hoặc mảng (key=val hoặc key[]=val1&key[]=val2)
+function getParamValues(sp: URLSearchParams, key: string): string[] {
+  const multi = sp.getAll(`${key}[]`)
+  if (multi.length > 0) return multi
+  const single = sp.get(key)
+  return single ? [single] : []
+}
+
 // ─── Route handler ────────────────────────────────────────────────────────────
 
 export async function GET(req: NextRequest) {
   const sp = req.nextUrl.searchParams
 
-  const fetchAll    = sp.get('all') === 'true'
-  const city        = sp.get('city')        || ''
-  const venue_type  = sp.get('venue_type')  || ''
-  const screen_type = sp.get('screen_type') || ''
-  const page        = sp.has('page')  ? Number(sp.get('page'))  : 1
-  const limit       = sp.has('limit') ? Number(sp.get('limit')) : 20
+  const fetchAll     = sp.get('all') === 'true'
+  const cities       = getParamValues(sp, 'city')
+  const venue_types  = getParamValues(sp, 'venue_type')
+  const screen_types = getParamValues(sp, 'screen_type')
+  const orientations = getParamValues(sp, 'orientation')
+  const q            = sp.get('q')    || ''
+  const sort         = sp.get('sort') || ''
+  const page         = sp.has('page')  ? Number(sp.get('page'))  : 1
+  const limit        = sp.has('limit') ? Number(sp.get('limit')) : 20
 
   const cacheKey = fetchAll
-    ? `all:${city}:${venue_type}:${screen_type}`
-    : `list:${page}:${limit}:${city}:${venue_type}:${screen_type}`
+    ? `map:${cities.join(',')}:${venue_types.join(',')}:${screen_types.join(',')}:${orientations.join(',')}:${q}:${sort}`
+    : `list:${page}:${limit}:${cities.join(',')}:${venue_types.join(',')}:${screen_types.join(',')}:${orientations.join(',')}:${q}:${sort}`
 
-  // Trả từ cache nếu còn hợp lệ
   const hit = getCached<object>(cacheKey)
   if (hit) {
     return NextResponse.json(hit, {
@@ -45,20 +56,23 @@ export async function GET(req: NextRequest) {
     })
   }
 
-  const baseParams = {
-    status:      'active' as const,
-    city:        city        || undefined,
-    venue_type:  (venue_type  || undefined) as ScreenListParams['venue_type'],
-    screen_type: (screen_type || undefined) as ScreenListParams['screen_type'],
+  const baseParams: Omit<ScreenListParams, 'page' | 'limit'> = {
+    status:      'active',
+    city:        cities.length       > 0 ? cities       : undefined,
+    venue_type:  venue_types.length  > 0 ? venue_types  : undefined,
+    screen_type: screen_types.length > 0 ? screen_types : undefined,
+    orientation: orientations.length > 0 ? orientations : undefined,
+    q:           q    || undefined,
+    sort:        (sort || undefined) as ScreenListParams['sort'],
   }
 
   try {
     let result: object
 
     if (fetchAll) {
-      // Map view: fetch toàn bộ qua parallel pagination
-      const data = await getAllScreens(baseParams)
-      result = { total: data.length, page: 1, limit: data.length, data: mapScreenList(data) }
+      // Map view: /inventory/screens/map — payload nhỏ ~90%, không cần paginate
+      const data = await getMapScreens(baseParams)
+      result = { total: data.length, page: 1, limit: data.length, data: mapMapScreenList(data) }
       setCached(cacheKey, result, 5 * 60 * 1000) // 5 phút
     } else {
       // List view: một trang
@@ -77,9 +91,8 @@ export async function GET(req: NextRequest) {
   }
 }
 
-// Cache-Control headers → Vercel CDN cache thêm một lớp nữa
 function cacheHeaders(fetchAll: boolean) {
-  const maxAge = fetchAll ? 300 : 120 // seconds
+  const maxAge = fetchAll ? 300 : 120
   return {
     'Cache-Control': `public, s-maxage=${maxAge}, stale-while-revalidate=${maxAge * 2}`,
   }
