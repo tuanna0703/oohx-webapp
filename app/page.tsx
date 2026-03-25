@@ -68,22 +68,16 @@ export default function HomePage() {
     });
   }
 
-  // Fetch stats + venue types + featured owners + featured screens song song
+  // Fetch tất cả homepage data qua 1 endpoint duy nhất → tránh multi-Lambda TapON auth
   useEffect(() => {
-    Promise.all([
-      fetchWithRetry('/api/stats'),
-      fetchWithRetry('/api/venue-types'),
-      fetchWithRetry('/api/owners?featured=true&limit=6'),
-      fetchWithRetry('/api/screens?limit=3&sort=newest'),
-    ]).then(([statsData, venueTypesData, ownersData, screensData]) => {
-      const s = statsData as Record<string, unknown> | null;
-      const v = venueTypesData as Record<string, unknown> | null;
-      const o = ownersData as Record<string, unknown> | null;
-      const sc = screensData as Record<string, unknown> | null;
-      if (s && !s.error)       setStats(s as unknown as InventoryStats);
-      if (v?.data)             setVenueTypes(flattenVenueTypes(v.data as VenueTypeNode[]));
-      if (o?.data)             setFeaturedOwners(o.data as TapOnOwner[]);
-      if (sc?.data)            setFeaturedScreens(sc.data as Screen[]);
+    fetchWithRetry('/api/homepage').then(raw => {
+      const d = raw as Record<string, unknown> | null;
+      if (!d || d.error) return;
+      if (d.stats)      setStats(d.stats as InventoryStats);
+      if (Array.isArray(d.venueTypes) && d.venueTypes.length > 0)
+                        setVenueTypes(flattenVenueTypes(d.venueTypes as VenueTypeNode[]));
+      if (Array.isArray(d.owners))   setFeaturedOwners(d.owners as TapOnOwner[]);
+      if (Array.isArray(d.screens))  setFeaturedScreens(d.screens as Screen[]);
     });
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
 

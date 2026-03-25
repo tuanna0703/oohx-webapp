@@ -63,6 +63,9 @@ function BrowsePageInner() {
   const [ownerSearching, setOwnerSearching] = useState(false);
   const [ownerNames, setOwnerNames]       = useState<Record<string, string>>({});
 
+  // Gate: chờ browse-init xong mới fetch screens → tránh 2 Lambda đồng thời auth TapON
+  const [initReady, setInitReady] = useState(false);
+
   // ── Dữ liệu màn hình ───────────────────────────────────────────────────────
   const [screens, setScreens] = useState<Screen[]>([]);
   const [loading, setLoading] = useState(true);
@@ -99,19 +102,20 @@ function BrowsePageInner() {
         });
     }
 
-    tryFetch('/api/venue-types',
-      d => Array.isArray((d as {data?: unknown[]}).data),
-      d => { if ((d as {data: unknown[]}).data.length > 0) setVenueTypeList(flattenVenueTypes((d as {data: VenueTypeNode[]}).data)); },
-    );
-
-    tryFetch('/api/networks',
-      d => Array.isArray((d as {data?: unknown[]}).data),
-      d => setNetworks((d as {data: NetworkItem[]}).data),
-    );
-
-    tryFetch('/api/locations',
-      d => Array.isArray((d as LocationsResponse).regions),
-      d => setLocData(d as LocationsResponse),
+    // Gộp venue-types + networks + locations vào 1 request → tránh multi-Lambda TapON auth
+    // setInitReady(true) sau khi xong → screens fetch mới bắt đầu (serialized, tránh concurrent auth)
+    tryFetch('/api/browse-init',
+      d => {
+        const r = d as { venueTypes?: unknown[]; networks?: unknown[]; locations?: { regions?: unknown[] } };
+        return Array.isArray(r.venueTypes) && Array.isArray(r.networks) && Array.isArray(r.locations?.regions);
+      },
+      d => {
+        const r = d as { venueTypes: VenueTypeNode[]; networks: NetworkItem[]; locations: LocationsResponse };
+        if (r.venueTypes.length > 0) setVenueTypeList(flattenVenueTypes(r.venueTypes));
+        setNetworks(r.networks);
+        setLocData(r.locations);
+        setInitReady(true);
+      },
     );
 
     return () => { cancelled = true; };
@@ -168,8 +172,9 @@ function BrowsePageInner() {
   // Reset page khi filter thay đổi
   useEffect(() => { setPage(1); }, [view, selRegions, selCities, selDistricts, selNetworks, selOwners, selVenues, selFormats, selOri, searchQ, sortBy]);
 
-  // ── Fetch màn hình (debounce 150ms để tránh double-fetch khi page reset + filter đổi) ──
+  // ── Fetch màn hình — chờ initReady để tránh đồng thời với browse-init (1 TapON auth tại một thời điểm) ──
   useEffect(() => {
+    if (!initReady) return; // chưa xong browse-init → không fetch
     const params = new URLSearchParams();
 
     if (view === 'map') {
@@ -225,7 +230,7 @@ function BrowsePageInner() {
       if (retryTimerRef.current) clearTimeout(retryTimerRef.current);
       fetchControllerRef.current?.abort();
     };
-  }, [view, selRegions, selCities, selDistricts, selNetworks, selOwners, selVenues, selFormats, selOri, searchQ, sortBy, page]);
+  }, [initReady, view, selRegions, selCities, selDistricts, selNetworks, selOwners, selVenues, selFormats, selOri, searchQ, sortBy, page]);
 
   // ── Owner search có debounce ────────────────────────────────────────────────
   useEffect(() => {
