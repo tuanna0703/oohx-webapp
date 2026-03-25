@@ -7,7 +7,7 @@ export default function Footer() {
       <div className="container">
         <div className="footer-grid">
           <div>
-            <Image src="/logo_footer.png" alt="OOHX" width={110} height={30} style={{ width: 'auto', height: '18px' }} />
+            <Image src="/logo_footer.png" alt="OOHX" width={110} height={30} style={{ width: 'auto', height: '20px' }} />
             <div className="footer-brand-desc">Vietnam&apos;s leading DOOH marketplace. Kết nối brand với màn hình kỹ thuật số trên khắp Việt Nam. Powered by TapON SSP · AdTRUE.</div>
           </div>
           <div>
