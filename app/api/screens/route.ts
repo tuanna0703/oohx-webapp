@@ -1,5 +1,6 @@
 // BFF Proxy — GET /api/screens
 // Browser → đây → ssp.tapon.vn (client_secret không bao giờ ra browser)
+export const maxDuration = 30 // Vercel: cho phép function chạy tối đa 30s
 
 import { NextRequest, NextResponse } from 'next/server'
 import { getScreens, getMapScreens } from '@/lib/tapon/inventory'
@@ -83,7 +84,10 @@ export async function GET(req: NextRequest) {
     if (fetchAll) {
       // Map view: /inventory/screens/map — payload nhỏ ~90%, không cần paginate
       const data = await getMapScreens(baseParams)
-      result = { total: data.length, page: 1, limit: data.length, data: mapMapScreenList(data) }
+      const mapped = mapMapScreenList(data)
+      const noCoords = mapped.filter(s => !s.lat || !s.lng).length
+      if (noCoords > 0) console.warn(`[/api/screens] ${noCoords}/${mapped.length} screens missing lat/lng`)
+      result = { total: mapped.length, page: 1, limit: mapped.length, data: mapped }
       setCached(cacheKey, result, 5 * 60 * 1000) // 5 phút
     } else {
       // List view: một trang

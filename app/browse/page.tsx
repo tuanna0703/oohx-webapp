@@ -151,13 +151,27 @@ function BrowsePageInner() {
     if (sortBy)  params.set('sort', sortBy);
 
     setLoading(true);
-    fetch(`/api/screens?${params}`, { signal: controller.signal })
-      .then(r => r.json())
-      .then(data => { setScreens(data.data ?? []); setTotal(data.total ?? 0); })
-      .catch(err => { if (err.name !== 'AbortError') setScreens([]); })
-      .finally(() => setLoading(false));
+    let attempt = 0;
+    const MAX_ATTEMPTS = 3;
+    let retryTimer: ReturnType<typeof setTimeout> | null = null;
 
-    return () => controller.abort();
+    function doFetch() {
+      fetch(`/api/screens?${params}`, { signal: controller.signal })
+        .then(r => { if (!r.ok) throw new Error(`HTTP ${r.status}`); return r.json(); })
+        .then(data => { setScreens(data.data ?? []); setTotal(data.total ?? 0); setLoading(false); })
+        .catch(err => {
+          if (err.name === 'AbortError') return; // component unmounted hoặc filter đổi
+          attempt++;
+          if (attempt < MAX_ATTEMPTS) {
+            retryTimer = setTimeout(doFetch, 2000 * attempt); // 2s, 4s
+          } else {
+            setScreens([]); setLoading(false);
+          }
+        });
+    }
+    doFetch();
+
+    return () => { controller.abort(); if (retryTimer) clearTimeout(retryTimer); };
   }, [view, selRegions, selCities, selDistricts, selNetworks, selOwners, selVenues, selFormats, selOri, searchQ, sortBy, page]);
 
   // ── Owner search có debounce ────────────────────────────────────────────────

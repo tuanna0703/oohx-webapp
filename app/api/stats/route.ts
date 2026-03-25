@@ -1,4 +1,5 @@
 // BFF Proxy — GET /api/stats
+export const maxDuration = 30
 
 import { NextResponse } from 'next/server'
 import { getStats } from '@/lib/tapon/stats'

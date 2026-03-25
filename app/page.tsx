@@ -57,20 +57,42 @@ export default function HomePage() {
     return () => document.removeEventListener('click', handler);
   }, []);
 
+  // Fetch với retry — gọi lại tối đa maxAttempts lần trước khi bỏ cuộc
+  function fetchWithRetry(url: string, maxAttempts = 3): Promise<unknown> {
+    return new Promise(resolve => {
+      let attempt = 0;
+      function attempt_() {
+        fetch(url)
+          .then(r => { if (!r.ok) throw new Error(`HTTP ${r.status}`); return r.json(); })
+          .then(resolve)
+          .catch(() => {
+            attempt++;
+            if (attempt < maxAttempts) setTimeout(attempt_, 2000 * attempt);
+            else resolve(null);
+          });
+      }
+      attempt_();
+    });
+  }
+
   // Fetch stats + venue types + featured owners + featured screens song song
   useEffect(() => {
     Promise.all([
-      fetch('/api/stats').then(r => r.json()).catch(() => null),
-      fetch('/api/venue-types').then(r => r.json()).catch(() => null),
-      fetch('/api/owners?featured=true&limit=6').then(r => r.json()).catch(() => null),
-      fetch('/api/screens?limit=3&sort=newest').then(r => r.json()).catch(() => null),
+      fetchWithRetry('/api/stats'),
+      fetchWithRetry('/api/venue-types'),
+      fetchWithRetry('/api/owners?featured=true&limit=6'),
+      fetchWithRetry('/api/screens?limit=3&sort=newest'),
     ]).then(([statsData, venueTypesData, ownersData, screensData]) => {
-      if (statsData && !statsData.error)     setStats(statsData);
-      if (venueTypesData?.data)              setVenueTypes(flattenVenueTypes(venueTypesData.data));
-      if (ownersData?.data)                  setFeaturedOwners(ownersData.data);
-      if (screensData?.data)                 setFeaturedScreens(screensData.data);
+      const s = statsData as Record<string, unknown> | null;
+      const v = venueTypesData as Record<string, unknown> | null;
+      const o = ownersData as Record<string, unknown> | null;
+      const sc = screensData as Record<string, unknown> | null;
+      if (s && !s.error)       setStats(s as unknown as InventoryStats);
+      if (v?.data)             setVenueTypes(flattenVenueTypes(v.data as VenueTypeNode[]));
+      if (o?.data)             setFeaturedOwners(o.data as TapOnOwner[]);
+      if (sc?.data)            setFeaturedScreens(sc.data as Screen[]);
     });
-  }, []);
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
   function toggleField(key: string, e: React.MouseEvent) {
     e.stopPropagation();

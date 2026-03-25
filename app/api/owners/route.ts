@@ -1,4 +1,5 @@
 // BFF Proxy — GET /api/owners
+export const maxDuration = 30
 
 import { NextRequest, NextResponse } from 'next/server'
 import { getOwners } from '@/lib/tapon/owners'

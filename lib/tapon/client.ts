@@ -66,6 +66,7 @@ export async function sspFetch(
 
   const res = await fetch(`${SSP_BASE}${path}`, {
     ...init,
+    signal: AbortSignal.timeout(25_000), // 25s — fail trước Vercel function timeout
     headers: {
       'Content-Type': 'application/json',
       'Authorization': `Bearer ${token}`,
