@@ -274,14 +274,16 @@ export default function MapBrowse({ screens }: Props) {
 function buildGeoJSON(screens: Screen[]): GeoJSON.FeatureCollection {
   return {
     type: 'FeatureCollection',
-    features: screens.map(s => ({
-      type: 'Feature',
-      geometry:   { type: 'Point', coordinates: [s.lng, s.lat] },
-      properties: {
-        id: s.id, name: s.name, loc: s.loc,
-        venue: s.venue, type: s.type, size: s.size,
-        color: VENUE_COLORS[s.venue] ?? '#3B47F0',
-      },
-    })),
+    features: screens
+      .filter(s => s.lat && s.lng && isFinite(s.lat) && isFinite(s.lng))
+      .map(s => ({
+        type: 'Feature',
+        geometry:   { type: 'Point', coordinates: [s.lng, s.lat] },
+        properties: {
+          id: s.id, name: s.name, loc: s.loc,
+          venue: s.venue, type: s.type, size: s.size,
+          color: VENUE_COLORS[s.venue] ?? '#3B47F0',
+        },
+      })),
   };
 }

@@ -30,8 +30,11 @@ export default function BrowsePage() {
 function BrowsePageInner() {
   const sp     = useSearchParams();
   const router = useRouter();
-  const mountedRef       = useRef(false);
-  const ownerDebounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const mountedRef        = useRef(false);
+  const ownerDebounceRef  = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const fetchDebounceRef   = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const fetchControllerRef = useRef<AbortController | null>(null);
+  const retryTimerRef      = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   // ── Filter state — khởi tạo từ URL ─────────────────────────────────────────
   const [view, setView]         = useState<'map' | 'list'>(() => (sp.get('view') as 'map' | 'list') ?? 'map');
@@ -165,9 +168,8 @@ function BrowsePageInner() {
   // Reset page khi filter thay đổi
   useEffect(() => { setPage(1); }, [view, selRegions, selCities, selDistricts, selNetworks, selOwners, selVenues, selFormats, selOri, searchQ, sortBy]);
 
-  // ── Fetch màn hình ──────────────────────────────────────────────────────────
+  // ── Fetch màn hình (debounce 150ms để tránh double-fetch khi page reset + filter đổi) ──
   useEffect(() => {
-    const controller = new AbortController();
     const params = new URLSearchParams();
 
     if (view === 'map') {
@@ -189,27 +191,40 @@ function BrowsePageInner() {
     if (sortBy)  params.set('sort', sortBy);
 
     setLoading(true);
-    let attempt = 0;
-    const MAX_ATTEMPTS = 3;
-    let retryTimer: ReturnType<typeof setTimeout> | null = null;
 
-    function doFetch() {
-      fetch(`/api/screens?${params}`, { signal: controller.signal })
-        .then(r => { if (!r.ok) throw new Error(`HTTP ${r.status}`); return r.json(); })
-        .then(data => { setScreens(data.data ?? []); setTotal(data.total ?? 0); setLoading(false); })
-        .catch(err => {
-          if (err.name === 'AbortError') return; // component unmounted hoặc filter đổi
-          attempt++;
-          if (attempt < MAX_ATTEMPTS) {
-            retryTimer = setTimeout(doFetch, 2000 * attempt); // 2s, 4s
-          } else {
-            setScreens([]); setLoading(false);
-          }
-        });
-    }
-    doFetch();
+    // Huỷ debounce và request cũ trước
+    if (fetchDebounceRef.current) clearTimeout(fetchDebounceRef.current);
+    fetchControllerRef.current?.abort();
 
-    return () => { controller.abort(); if (retryTimer) clearTimeout(retryTimer); };
+    fetchDebounceRef.current = setTimeout(() => {
+      const controller = new AbortController();
+      fetchControllerRef.current = controller;
+      let attempt = 0;
+      const MAX_ATTEMPTS = 3;
+
+      function doFetch() {
+        if (retryTimerRef.current) clearTimeout(retryTimerRef.current);
+        fetch(`/api/screens?${params}`, { signal: controller.signal })
+          .then(r => { if (!r.ok) throw new Error(`HTTP ${r.status}`); return r.json(); })
+          .then(data => { setScreens(data.data ?? []); setTotal(data.total ?? 0); setLoading(false); })
+          .catch(err => {
+            if (err.name === 'AbortError') return;
+            attempt++;
+            if (attempt < MAX_ATTEMPTS) {
+              retryTimerRef.current = setTimeout(doFetch, 2000 * attempt); // 2s, 4s
+            } else {
+              setLoading(false); // giữ nguyên screens cũ thay vì xoá
+            }
+          });
+      }
+      doFetch();
+    }, 150); // 150ms: đủ để page reset + filter settle trước khi fetch
+
+    return () => {
+      if (fetchDebounceRef.current) clearTimeout(fetchDebounceRef.current);
+      if (retryTimerRef.current) clearTimeout(retryTimerRef.current);
+      fetchControllerRef.current?.abort();
+    };
   }, [view, selRegions, selCities, selDistricts, selNetworks, selOwners, selVenues, selFormats, selOri, searchQ, sortBy, page]);
 
   // ── Owner search có debounce ────────────────────────────────────────────────
