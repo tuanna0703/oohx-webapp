@@ -1,4 +1,5 @@
 // BFF Proxy — GET /api/locations
+export const maxDuration = 30
 
 import { NextResponse } from 'next/server'
 import { getLocations } from '@/lib/tapon/inventory'
@@ -6,7 +7,6 @@ import { getLocations } from '@/lib/tapon/inventory'
 interface CacheEntry { data: unknown; exp: number }
 let cache: CacheEntry | null = null
 
-const EMPTY: { regions: []; provinces: []; districts: [] } = { regions: [], provinces: [], districts: [] }
 
 export async function GET() {
   if (cache && Date.now() < cache.exp) {
@@ -24,7 +24,7 @@ export async function GET() {
   } catch (err) {
     const message = err instanceof Error ? err.message : 'Unknown error'
     console.error('[/api/locations] TapON error:', message)
-    return NextResponse.json(EMPTY, { status: 200 }) // trả rỗng, không crash UI
+    return NextResponse.json({ error: 'Failed to load locations' }, { status: 502 })
   }
 }
 

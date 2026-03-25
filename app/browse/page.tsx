@@ -75,34 +75,72 @@ function BrowsePageInner() {
 
   // ── Fetch metadata filter khi mount ─────────────────────────────────────────
   useEffect(() => {
-    fetch('/api/venue-types')
-      .then(r => r.json())
-      .then(d => { if (d?.data?.length > 0) setVenueTypeList(flattenVenueTypes(d.data)); })
-      .catch(() => {});
+    let cancelled = false;
 
-    fetch('/api/networks')
-      .then(r => r.json())
-      .then(d => { if (d?.data?.length > 0) setNetworks(d.data); })
-      .catch(() => {});
+    function tryFetch(
+      url: string,
+      validate: (d: unknown) => boolean,
+      onSuccess: (d: unknown) => void,
+      attempts = 5,
+      delay = 3000,
+    ) {
+      fetch(url)
+        .then(r => { if (!r.ok) throw new Error(`HTTP ${r.status}`); return r.json(); })
+        .then(d => {
+          if (cancelled) return;
+          if (validate(d)) { onSuccess(d); }
+          else if (attempts > 1) setTimeout(() => tryFetch(url, validate, onSuccess, attempts - 1, delay), delay);
+        })
+        .catch(() => {
+          if (!cancelled && attempts > 1) setTimeout(() => tryFetch(url, validate, onSuccess, attempts - 1, delay), delay);
+        });
+    }
 
-    fetch('/api/locations')
-      .then(r => r.json())
-      .then(d => { if (d?.regions) setLocData(d); })
-      .catch(() => {});
+    tryFetch('/api/venue-types',
+      d => Array.isArray((d as {data?: unknown[]}).data) && (d as {data: unknown[]}).data.length > 0,
+      d => setVenueTypeList(flattenVenueTypes((d as {data: VenueTypeNode[]}).data)),
+    );
+
+    tryFetch('/api/networks',
+      d => Array.isArray((d as {data?: unknown[]}).data) && (d as {data: unknown[]}).data.length > 0,
+      d => setNetworks((d as {data: NetworkItem[]}).data),
+    );
+
+    tryFetch('/api/locations',
+      d => Array.isArray((d as LocationsResponse).regions) && (d as LocationsResponse).regions.length > 0,
+      d => setLocData(d as LocationsResponse),
+    );
+
+    return () => { cancelled = true; };
   }, []);
 
-  // Nếu URL có owner[], lấy tên để hiển thị chip
+  // Nếu URL có owner[], lấy tên để hiển thị chip — retry nếu API lỗi
   useEffect(() => {
     const initOwners = sp.getAll('owner[]');
     if (initOwners.length === 0) return;
-    fetch('/api/owners?limit=50')
-      .then(r => r.json())
-      .then(d => {
-        const map: Record<string, string> = {};
-        (d?.data ?? []).forEach((o: TapOnOwner) => { map[o.owner_id] = o.name; });
-        setOwnerNames(map);
-      })
-      .catch(() => {});
+    let cancelled = false;
+    let attempt = 0;
+    let timer: ReturnType<typeof setTimeout> | null = null;
+    function doFetch() {
+      fetch('/api/owners?limit=50')
+        .then(r => { if (!r.ok) throw new Error(`HTTP ${r.status}`); return r.json(); })
+        .then(d => {
+          if (cancelled) return;
+          if (d?.data?.length > 0) {
+            const map: Record<string, string> = {};
+            (d.data as TapOnOwner[]).forEach(o => { map[o.owner_id] = o.name; });
+            setOwnerNames(map);
+          } else {
+            attempt++;
+            if (attempt < 5) timer = setTimeout(doFetch, 3000);
+          }
+        })
+        .catch(() => {
+          if (!cancelled) { attempt++; if (attempt < 5) timer = setTimeout(doFetch, 3000); }
+        });
+    }
+    doFetch();
+    return () => { cancelled = true; if (timer) clearTimeout(timer); };
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
   // ── URL sync — push khi filter thay đổi (bỏ qua lần mount đầu) ─────────────

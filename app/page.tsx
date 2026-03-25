@@ -12,13 +12,6 @@ const hsLabels: Record<string, Record<string, string>> = {
   loc: { all: 'Toàn quốc' },
 };
 
-const FALLBACK_VENUE_TYPES: VenueTypeNode[] = [
-  { type: 'mall',    label: 'Retail / Mall',   count: 0, children: [] },
-  { type: 'outdoor', label: 'Outdoor',          count: 0, children: [] },
-  { type: 'fnb',     label: 'F&B / Coffee',     count: 0, children: [] },
-  { type: 'transit', label: 'Transit',          count: 0, children: [] },
-  { type: 'office',  label: 'Office',           count: 0, children: [] },
-];
 
 /** Flatten cây venue types thành danh sách phẳng để hiển thị chips.
  *  Root nodes được giữ nguyên; nếu root có children thì thêm children vào sau (indent). */
@@ -43,7 +36,7 @@ export default function HomePage() {
 
   // ── API data ──────────────────────────────────────────────────────────────
   const [stats, setStats]                   = useState<InventoryStats | null>(null);
-  const [venueTypes, setVenueTypes]         = useState<VenueTypeNode[]>(FALLBACK_VENUE_TYPES);
+  const [venueTypes, setVenueTypes]         = useState<VenueTypeNode[]>([]);
   const [featuredOwners, setFeaturedOwners] = useState<TapOnOwner[]>([]);
   const [featuredScreens, setFeaturedScreens] = useState<Screen[]>([]);
 

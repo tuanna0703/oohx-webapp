@@ -1,4 +1,5 @@
 // BFF Proxy — GET /api/networks
+export const maxDuration = 30
 
 import { NextResponse } from 'next/server'
 import { getNetworks } from '@/lib/tapon/inventory'
@@ -23,7 +24,7 @@ export async function GET() {
   } catch (err) {
     const message = err instanceof Error ? err.message : 'Unknown error'
     console.error('[/api/networks] TapON error:', message)
-    return NextResponse.json({ data: [] }, { status: 200 }) // trả rỗng, không crash UI
+    return NextResponse.json({ error: 'Failed to load networks' }, { status: 502 })
   }
 }
 
