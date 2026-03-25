@@ -26,7 +26,7 @@ export default function Navbar() {
         <div className="container">
           <div className="nav-inner">
             <Link href="/" className="nav-logo">
-              <Image src="/oohx_logo.png" alt="OOHX" width={110} height={30} priority style={{ width: 'auto', height: '22px' }} />
+              <Image src="/oohx_logo.png" alt="OOHX" width={110} height={30} priority style={{ width: 'auto', height: '18px' }} />
             </Link>
 
             <div className="nav-links">
