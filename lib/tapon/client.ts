@@ -14,6 +14,8 @@ interface TokenCache {
 }
 
 let _cache: TokenCache | null = null
+// Dedup: nhiều request đồng thời chỉ fetch token 1 lần
+let _pendingToken: Promise<string> | null = null
 
 async function fetchToken(): Promise<string> {
   // Còn hơn 60 giây → tái sử dụng
@@ -21,38 +23,50 @@ async function fetchToken(): Promise<string> {
     return _cache.token
   }
 
-  const clientId     = process.env.TAPON_CLIENT_ID     ?? 'oohx_marketplace'
-  const clientSecret = process.env.TAPON_CLIENT_SECRET
+  // Đang có request token đang chờ → dùng chung, tránh N concurrent auth calls
+  if (_pendingToken) return _pendingToken
 
-  if (!clientSecret) {
-    throw new Error('[TapON] TAPON_CLIENT_SECRET is not set')
-  }
+  _pendingToken = (async () => {
+    try {
+      const clientId     = process.env.TAPON_CLIENT_ID     ?? 'oohx_marketplace'
+      const clientSecret = process.env.TAPON_CLIENT_SECRET
 
-  const res = await fetch(`${SSP_BASE}/auth/token`, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({
-      client_id:     clientId,
-      client_secret: clientSecret,
-      grant_type:    'client_credentials',
-      scope:         'inventory booking reporting',
-    }),
-    cache: 'no-store',
-  })
+      if (!clientSecret) {
+        throw new Error('[TapON] TAPON_CLIENT_SECRET is not set')
+      }
 
-  if (!res.ok) {
-    const body = await res.text()
-    throw new Error(`[TapON] Auth failed ${res.status}: ${body}`)
-  }
+      const res = await fetch(`${SSP_BASE}/auth/token`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          client_id:     clientId,
+          client_secret: clientSecret,
+          grant_type:    'client_credentials',
+          scope:         'inventory booking reporting',
+        }),
+        signal: AbortSignal.timeout(10_000), // 10s timeout cho auth
+        cache: 'no-store',
+      })
 
-  const data: TapOnTokenResponse = await res.json()
+      if (!res.ok) {
+        const body = await res.text()
+        throw new Error(`[TapON] Auth failed ${res.status}: ${body}`)
+      }
 
-  _cache = {
-    token:     data.access_token,
-    expiresAt: Date.now() + data.expires_in * 1000,
-  }
+      const data: TapOnTokenResponse = await res.json()
 
-  return _cache.token
+      _cache = {
+        token:     data.access_token,
+        expiresAt: Date.now() + data.expires_in * 1000,
+      }
+
+      return _cache.token
+    } finally {
+      _pendingToken = null
+    }
+  })()
+
+  return _pendingToken
 }
 
 // ─── Main fetch wrapper ───────────────────────────────────────────────────────
