@@ -14,7 +14,7 @@ interface TokenCache {
 }
 
 let _cache: TokenCache | null = null
-// Dedup: nhiều request đồng thời chỉ fetch token 1 lần
+// Dedup: nhiều request đồng thời trong cùng process chỉ fetch token 1 lần
 let _pendingToken: Promise<string> | null = null
 
 async function fetchToken(): Promise<string> {
@@ -35,32 +35,60 @@ async function fetchToken(): Promise<string> {
         throw new Error('[TapON] TAPON_CLIENT_SECRET is not set')
       }
 
-      const res = await fetch(`${SSP_BASE}/auth/token`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          client_id:     clientId,
-          client_secret: clientSecret,
-          grant_type:    'client_credentials',
-          scope:         'inventory booking reporting',
-        }),
-        signal: AbortSignal.timeout(10_000), // 10s timeout cho auth
-        cache: 'no-store',
-      })
+      // Retry với jitter để tránh nhiều Lambda cold-start cùng đập TapON auth một lúc
+      const MAX_ATTEMPTS = 3
+      let lastErr: unknown
 
-      if (!res.ok) {
+      for (let attempt = 0; attempt < MAX_ATTEMPTS; attempt++) {
+        if (attempt > 0) {
+          // Jitter: 400-900ms để các Lambda stagger retry, không đồng loạt
+          const delay = 400 + Math.random() * 500
+          await new Promise(r => setTimeout(r, delay))
+        }
+
+        let res: Response
+        try {
+          res = await fetch(`${SSP_BASE}/auth/token`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              client_id:     clientId,
+              client_secret: clientSecret,
+              grant_type:    'client_credentials',
+              scope:         'inventory booking reporting',
+            }),
+            signal: AbortSignal.timeout(8_000), // 8s per attempt
+            cache: 'no-store',
+          })
+        } catch (err) {
+          // Network error / timeout → retry
+          lastErr = err
+          console.warn(`[TapON] Auth attempt ${attempt + 1} network error:`, err)
+          continue
+        }
+
+        if (res.ok) {
+          const data: TapOnTokenResponse = await res.json()
+          _cache = {
+            token:     data.access_token,
+            expiresAt: Date.now() + data.expires_in * 1000,
+          }
+          return _cache.token
+        }
+
+        // 429 (rate limit) hoặc 5xx (server error) → retry
+        if (res.status === 429 || res.status >= 500) {
+          lastErr = new Error(`[TapON] Auth ${res.status}`)
+          console.warn(`[TapON] Auth attempt ${attempt + 1} failed (${res.status}), will retry`)
+          continue
+        }
+
+        // 4xx khác (401, 403...) → sai credentials, không retry
         const body = await res.text()
         throw new Error(`[TapON] Auth failed ${res.status}: ${body}`)
       }
 
-      const data: TapOnTokenResponse = await res.json()
-
-      _cache = {
-        token:     data.access_token,
-        expiresAt: Date.now() + data.expires_in * 1000,
-      }
-
-      return _cache.token
+      throw lastErr ?? new Error('[TapON] Auth failed after all retries')
     } finally {
       _pendingToken = null
     }
