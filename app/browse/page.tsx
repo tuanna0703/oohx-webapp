@@ -100,17 +100,17 @@ function BrowsePageInner() {
     }
 
     tryFetch('/api/venue-types',
-      d => Array.isArray((d as {data?: unknown[]}).data) && (d as {data: unknown[]}).data.length > 0,
-      d => setVenueTypeList(flattenVenueTypes((d as {data: VenueTypeNode[]}).data)),
+      d => Array.isArray((d as {data?: unknown[]}).data),
+      d => { if ((d as {data: unknown[]}).data.length > 0) setVenueTypeList(flattenVenueTypes((d as {data: VenueTypeNode[]}).data)); },
     );
 
     tryFetch('/api/networks',
-      d => Array.isArray((d as {data?: unknown[]}).data) && (d as {data: unknown[]}).data.length > 0,
+      d => Array.isArray((d as {data?: unknown[]}).data),
       d => setNetworks((d as {data: NetworkItem[]}).data),
     );
 
     tryFetch('/api/locations',
-      d => Array.isArray((d as LocationsResponse).regions) && (d as LocationsResponse).regions.length > 0,
+      d => Array.isArray((d as LocationsResponse).regions),
       d => setLocData(d as LocationsResponse),
     );
 
